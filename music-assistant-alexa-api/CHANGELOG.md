@@ -1,3 +1,9 @@
+## 1.3.4
+
+- Align Portuguese invocation and playback samples with the Music Assistant provider.
+- Include infinitive search utterances and next/previous intents.
+- Verify exported icon bytes when Amazon rewrites icon references.
+
 ## 1.3.3
 
 - Keep an empty launch session open to request a track or station.

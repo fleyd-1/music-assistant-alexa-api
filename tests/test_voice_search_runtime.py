@@ -1,4 +1,5 @@
 import sys
+import os
 import importlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON = ROOT / "music-assistant-alexa-api"
-sys.path[:0] = [
+sys.path[:0] = [os.environ["SKILL_APP_PATH"]] if os.environ.get("SKILL_APP_PATH") else [
     str(ADDON / "skill-overlay/app"),
     str(ADDON / "skill-api/app"),
 ]
@@ -24,7 +25,8 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
     import shared_store
     import skill
 
-    skill.__path__.insert(0, str(ADDON / "skill-overlay/app/skill"))
+    if not os.environ.get("SKILL_APP_PATH"):
+        skill.__path__.insert(0, str(ADDON / "skill-overlay/app/skill"))
     voice = importlib.import_module("skill.ma_voice_search")
 
     shared_store.set_ma({"streamUrl": "https://old.example/old.mp3"})

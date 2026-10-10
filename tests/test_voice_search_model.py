@@ -25,6 +25,7 @@ def test_portuguese_voice_search_intents_are_configured():
         "reproduz a transmissão atual",
         "continua a transmissão atual",
         "retoma a transmissão atual",
+        "reproduzir áudio", "reproduz áudio", "tocar áudio",
     ]
     assert not any(
         phrase in sample

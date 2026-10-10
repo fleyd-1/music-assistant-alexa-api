@@ -23,3 +23,18 @@ def test_launch_without_stream_keeps_session_open(monkeypatch):
     assert 'reprompt' in response
     assert 'Que música' in response['outputSpeech']['ssml']
     assert not response.get('directives')
+
+
+def test_export_icon_references_compare_the_bundled_bytes():
+    import json
+    from skill_deployment import package_fingerprint
+    def package(uri, icon=b'approved-image'):
+        return {'skill.json': json.dumps({'manifest': {'publishingInformation': {
+            'locales': {'pt-BR': {'smallIconUri': uri}}}}}).encode(),
+            'assets/images/pt-BR_smallIconUri.png': icon}
+    expected = package('https://example.com/icon.png')
+    exported = package('file://assets/images/pt-BR_smallIconUri.png')
+    assert package_fingerprint(expected) == package_fingerprint(exported)
+    assert package_fingerprint(expected) != package_fingerprint(package('file://icon', b'changed-image'))
+    exported.pop('assets/images/pt-BR_smallIconUri.png')
+    assert package_fingerprint(expected) != package_fingerprint(exported)
