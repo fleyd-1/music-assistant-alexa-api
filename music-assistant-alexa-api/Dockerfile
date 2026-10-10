@@ -48,6 +48,9 @@ RUN python3 -m venv venv && \
 COPY skill-api/app /app/src
 COPY skill-api/assets /app/assets
 COPY skill-api/scripts /app/scripts
+# Apply this fork's Alexa voice-search extension after the pinned upstream
+# skill source so the setup wizard and runtime use the same model and handler.
+COPY skill-overlay/app /app/src
 RUN ln -s /app/src /app/app && \
     chmod +x /app/scripts/*.sh
 
