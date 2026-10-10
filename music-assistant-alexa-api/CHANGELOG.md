@@ -1,3 +1,8 @@
+## 1.3.7
+
+- Normalize spoken radio names before searching saved stations, avoiding provider false matches and timeouts.
+- Route the stale saved FUTURA station to its verified official Radio.co stream.
+
 ## 1.3.6
 
 - Ask what to play when a previously cached stream has expired, instead of ending the launch with a misleading connection error.

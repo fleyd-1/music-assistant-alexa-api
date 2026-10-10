@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _PUSH_TIMEOUT = 3.0
 _REQUEST_TIMEOUT = 6.5
+_FUTURA_STREAM_URI = "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
 
 
 class SearchPlaybackError(Exception):
@@ -36,6 +37,33 @@ def _normal(value):
 async def find_media(client, query, media_type):
     """Prefer the library; split title/artist only when metadata verifies both."""
     queries = [query]
+    if media_type == "radio":
+        # Alexa often includes "radio" in the slot value, while MA's saved
+        # station search indexes the station name itself. Try the concise name
+        # first so a library hit does not depend on a slower provider search.
+        concise = re.sub(r"^(?:radio|rádio)\s+", "", query.strip(), flags=re.I)
+        concise = re.sub(r"\s+(?:radio|rádio)\s+de\s+autor$", "", concise,
+                         flags=re.I).strip()
+        if concise and _normal(concise) != _normal(query):
+            queries.insert(0, concise)
+        # Check all saved stations before broad provider searches. This keeps
+        # familiar station names such as "RFM" and "Futura" quick and stable.
+        for search in queries:
+            results = await client.music.search(search_query=search,
+                media_types=[MediaType.RADIO], limit=20, library_only=True)
+            items = [x for x in getattr(results, "radio", [])
+                     if getattr(x, "uri", None)]
+            if items:
+                return min(items, key=lambda x: not x.uri.startswith("library://"))
+        for search in queries:
+            results = await client.music.search(search_query=search,
+                media_types=[MediaType.RADIO], limit=20)
+            items = [x for x in getattr(results, "radio", [])
+                     if getattr(x, "uri", None)]
+            if items:
+                return min(items, key=lambda x: not x.uri.startswith("library://"))
+        raise SearchPlaybackError("not_found")
+
     title, artist = query, None
     if media_type == "track":
         parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
@@ -77,9 +105,18 @@ async def _search_and_play(query, media_type, player_id, old_version, server_url
         async with MusicAssistantClient(server_url, session, token=token) as client:
             item = await find_media(client, query, media_type)
 
+            # The saved FUTURA entry still points at a dead mediatiquestream
+            # hostname. The station's own Radio.co stream is live; route this
+            # exact saved station through MA's built-in URL provider until its
+            # library entry can be replaced safely.
+            media_uri = item.uri
+            if (media_type == "radio" and
+                    _normal(getattr(item, "name", "")) == "futura radio de autor"):
+                media_uri = _FUTURA_STREAM_URI
+
             await client.player_queues.play_media(
                 queue_id=player_id,
-                media=item.uri,
+                media=media_uri,
                 option=QueueOption.REPLACE,
             )
 

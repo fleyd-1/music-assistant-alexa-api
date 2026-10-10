@@ -103,3 +103,68 @@ def test_radio_prefers_saved_library_station():
     result = asyncio.run(find_media(SimpleNamespace(music=SimpleNamespace(search=search)),
                                    'Rádio Comercial', 'radio'))
     assert result.uri == 'library://radio/3'
+
+
+@pytest.mark.parametrize(("query", "expected"), [
+    ("rádio RFM", "RFM"),
+    ("rádio futura rádio de autor", "futura"),
+])
+def test_radio_searches_concise_saved_station_name_first(query, expected):
+    import asyncio
+    from music_assistant_models.enums import MediaType
+    from skill.ma_voice_search import find_media
+    calls = []
+    station = SimpleNamespace(uri='library://radio/3', name=expected)
+
+    async def search(**kwargs):
+        calls.append(kwargs)
+        if kwargs.get('library_only') and kwargs['search_query'].casefold() == expected.casefold():
+            return SimpleNamespace(radio=[station])
+        return SimpleNamespace(radio=[])
+
+    result = asyncio.run(find_media(
+        SimpleNamespace(music=SimpleNamespace(search=search)), query, 'radio'))
+    assert result is station
+    assert calls[0]['search_query'] == expected
+    assert calls[0]['media_types'] == [MediaType.RADIO]
+    assert calls[0]['library_only'] is True
+    assert len(calls) == 1
+
+
+def test_futura_voice_uses_live_official_stream_for_stale_saved_item(monkeypatch):
+    import shared_store
+    import skill
+    if not os.environ.get("SKILL_APP_PATH"):
+        skill.__path__.insert(0, str(ADDON / "skill-overlay/app/skill"))
+    voice = importlib.import_module("skill.ma_voice_search")
+    saved = SimpleNamespace(uri="library://radio/11", name="FUTURA - Rádio de Autor")
+    called = {}
+
+    class FakeClient:
+        def __init__(self, server_url, session, token=None):
+            self.music = SimpleNamespace(search=self.search)
+            self.player_queues = SimpleNamespace(play_media=self.play_media)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def search(self, **kwargs):
+            if kwargs.get("library_only"):
+                return SimpleNamespace(radio=[saved])
+            return SimpleNamespace(radio=[])
+
+        async def play_media(self, **kwargs):
+            called.update(kwargs)
+            shared_store.set_ma({"streamUrl": "https://stream.example/futura.mp3",
+                                 "player_id": "echo-dot"})
+
+    monkeypatch.setattr(voice, "MusicAssistantClient", FakeClient)
+    monkeypatch.setattr(voice, "get_env_secret", lambda key: {
+        "MA_API_URL": "http://music-assistant:8095", "MA_API_TOKEN": "test-token",
+    }.get(key))
+    stream = voice.play_search_result("rádio futura", "radio", "echo-dot")
+    assert called["media"] == "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
+    assert stream["streamUrl"] == "https://stream.example/futura.mp3"
