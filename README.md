@@ -100,6 +100,18 @@ Set `enable_apl: true` to opt into Echo Show artwork and controls; it defaults
 to false. `skip_url_validation` remains false unless local routing prevents
 this container from checking a stream which the Echo can reach publicly.
 
+### Search for a specific track or radio by voice
+
+After opening the skill, ask for a Music Assistant result, for example:
+
+- “Alexa, abre minha rádio. Toca a música `Sola Sistim`.”
+- “Alexa, abre minha rádio. Toca a rádio `Rádio Comercial`.”
+
+The skill searches Music Assistant for a track or radio and starts the first
+matching result on the Echo mapped to that Music Assistant player. This requires
+the optional Music Assistant control API URL/token above. Search results depend
+on the providers and library available in Music Assistant.
+
 ## Skill Setup
 
 Create or update your personal Alexa development skill through the **Setup** page. You do not need to manually create the skill, import interaction-model JSON, configure interfaces or build it in the Alexa Developer Console. One-time **Login with Amazon (LWA) security-profile registration** is still required.
