@@ -17,3 +17,17 @@ def test_portuguese_voice_search_intents_are_configured():
 
     assert "toca a música {query}" in by_name["PlayTrackIntent"]["samples"]
     assert "toca a rádio {query}" in by_name["PlayRadioIntent"]["samples"]
+
+    # Keep the no-slot legacy playback intent from stealing track/radio
+    # queries before Alexa can populate the SearchQuery slot.
+    assert by_name["PlayAudio"]["samples"] == [
+        "toca a transmissão atual",
+        "reproduz a transmissão atual",
+        "continua a transmissão atual",
+        "retoma a transmissão atual",
+    ]
+    assert not any(
+        phrase in sample
+        for sample in by_name["PlayAudio"]["samples"]
+        for phrase in ("música", "canção", "rádio", "estação")
+    )

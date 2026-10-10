@@ -1,5 +1,9 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.2
+
+- Remove broad no-slot playback phrases that caused Alexa to route specific track and radio requests to `PlayAudio` instead of the voice-search intents.
+
 ## 1.3.0
 
 - Promote the personal-skill deployment wizard to stable following maintainer confirmation that it is tested and working.
