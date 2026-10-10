@@ -1,3 +1,8 @@
+## 1.3.6
+
+- Ask what to play when a previously cached stream has expired, instead of ending the launch with a misleading connection error.
+- Keep private stream URLs out of validation logs.
+
 ## 1.3.5
 
 - Route both flow and single/radio streams to the correct Echo.

@@ -180,14 +180,15 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
         url, _audio = _get_stream_url(request)
         logger.info("Current stream available: %s", bool(url))
 
+        prompt = (
+            "Que música ou rádio queres ouvir? Podes dizer: toca a música "
+            "Sola Sistim dos Underworld, ou toca a rádio Rádio Comercial."
+            if getattr(request, "locale", "").startswith("pt") else
+            "What music or radio would you like to hear?"
+        )
+
         if not url:
             logger.info("No current stream; asking the user what to play")
-            prompt = (
-                "Que música ou rádio queres ouvir? Podes dizer: toca a música "
-                "Sola Sistim dos Underworld, ou toca a rádio Rádio Comercial."
-                if getattr(request, "locale", "").startswith("pt") else
-                "What music or radio would you like to hear?"
-            )
             handler_input.response_builder.speak(prompt).ask(prompt)
             return handler_input.response_builder.response
 
@@ -197,7 +198,8 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
             offset=0,
             text=data.WELCOME_MSG,
             response_builder=handler_input.response_builder,
-            supports_apl=_supports_apl(handler_input)
+            supports_apl=_supports_apl(handler_input),
+            unreachable_prompt=prompt,
         )
 
 
