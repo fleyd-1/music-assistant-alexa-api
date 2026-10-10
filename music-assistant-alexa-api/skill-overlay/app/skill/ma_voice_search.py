@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import re
+import unicodedata
 import time
 
 import aiohttp
@@ -26,18 +28,50 @@ class SearchPlaybackError(Exception):
     """A safe-to-report error while searching or starting playback."""
 
 
+def _normal(value):
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", unicodedata.normalize(
+        "NFKD", value.casefold()).encode("ascii", "ignore").decode()).split())
+
+
+async def find_media(client, query, media_type):
+    """Prefer the library; split title/artist only when metadata verifies both."""
+    queries = [query]
+    title, artist = query, None
+    if media_type == "track":
+        parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
+        if len(parts) > 1:
+            title, artist = " de ".join(parts[:-1]), parts[-1]
+            queries.insert(0, title)
+    for search in queries:
+        results = await client.music.search(search_query=search,
+            media_types=[MediaType(media_type)], limit=20)
+        items = getattr(results, "tracks" if media_type == "track" else "radio", [])
+        items = [x for x in items if getattr(x, "uri", None)]
+        if artist:
+            items = [x for x in items if _normal(getattr(x, "name", "")) == _normal(title)
+                     and any(_normal(a.name) == _normal(artist)
+                             for a in getattr(x, "artists", []))]
+        if items:
+            return min(items, key=lambda x: not x.uri.startswith("library://"))
+    # MA does not interpret a concatenated title + artist as a structured query.
+    # Try a bounded set of title prefixes, accepting only an exact metadata match.
+    if media_type == "track" and not artist:
+        words = query.split()
+        for count in range(1, min(4, len(words))):
+            title, artist = " ".join(words[:-count]), " ".join(words[-count:])
+            results = await client.music.search(search_query=title,
+                media_types=[MediaType.TRACK], limit=20)
+            for item in results.tracks:
+                if (_normal(item.name) == _normal(title) and
+                    any(_normal(a.name) == _normal(artist) for a in item.artists)):
+                    return item
+    raise SearchPlaybackError("not_found")
+
+
 async def _search_and_play(query, media_type, player_id, old_version, server_url, token):
     async with aiohttp.ClientSession() as session:
         async with MusicAssistantClient(server_url, session, token=token) as client:
-            results = await client.music.search(
-                search_query=query,
-                media_types=[MediaType(media_type)],
-                limit=5,
-            )
-            items = getattr(results, "tracks" if media_type == "track" else "radio", [])
-            item = next((candidate for candidate in items if getattr(candidate, "uri", None)), None)
-            if item is None:
-                raise SearchPlaybackError("not_found")
+            item = await find_media(client, query, media_type)
 
             await client.player_queues.play_media(
                 queue_id=player_id,
@@ -49,7 +83,7 @@ async def _search_and_play(query, media_type, player_id, old_version, server_url
     # back to this add-on. Wait briefly so the Alexa response can play that URL.
     deadline = time.monotonic() + _PUSH_TIMEOUT
     while time.monotonic() < deadline:
-        current = shared_store.get_ma() or {}
+        current = shared_store.get_ma(player_id) or {}
         if current.get("version", 0) > old_version and current.get("streamUrl"):
             return current
         await asyncio.sleep(0.1)
@@ -63,7 +97,7 @@ def play_search_result(query, media_type, player_id):
     if not server_url:
         raise SearchPlaybackError("missing_api")
 
-    old_version = (shared_store.get_ma() or {}).get("version", 0)
+    old_version = (shared_store.get_ma(player_id) or {}).get("version", 0)
     try:
         return asyncio.run(
             asyncio.wait_for(

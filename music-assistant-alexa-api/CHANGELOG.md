@@ -1,3 +1,10 @@
+## 1.3.3
+
+- Keep an empty launch session open to request a track or station.
+- Search title and artist separately with metadata verification; prefer saved stations.
+- Isolate cached streams by Music Assistant player to prevent cross-device playback.
+- Include voice-search regression tests in container CI.
+
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
 ## 1.3.2

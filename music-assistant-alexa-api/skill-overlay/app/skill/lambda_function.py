@@ -178,15 +178,20 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
         _ = handler_input.attributes_manager.request_attributes["_"]
         request = handler_input.request_envelope.request
         url, _audio = _get_stream_url(request)
-        logger.info("URL from util.audio_data: %s", url)
+        logger.info("Current stream available: %s", bool(url))
 
         if not url:
-            logger.warning("No streamUrl available for Launch/Play request")
-            handler_input.response_builder.speak(
-                "Sorry, I could not retrieve the latest music stream from the API. Please check your setup.").set_should_end_session(True)
+            logger.info("No current stream; asking the user what to play")
+            prompt = (
+                "Que música ou rádio queres ouvir? Podes dizer: toca a música "
+                "Sola Sistim dos Underworld, ou toca a rádio Rádio Comercial."
+                if getattr(request, "locale", "").startswith("pt") else
+                "What music or radio would you like to hear?"
+            )
+            handler_input.response_builder.speak(prompt).ask(prompt)
             return handler_input.response_builder.response
 
-        logger.info("Playing URL: %s", url)
+        logger.info("Emitting AudioPlayer.Play")
         return util.play(
             url=url,
             offset=0,
@@ -235,7 +240,7 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
         try:
             ma_voice_search.play_search_result(query, media_type, player_id)
             # Refresh the per-request snapshot after MA has pushed the new URL.
-            data.begin_request()
+            data.begin_request(device_mapping.get_player_for_device(_device_id_from(handler_input)))
             url, _audio = _get_stream_url(request)
             if not url:
                 raise ma_voice_search.SearchPlaybackError("stream_timeout")
@@ -780,7 +785,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 class APLSupportRequestInterceptor(AbstractRequestInterceptor):
     """Capture metadata and device capabilities independently for each request."""
     def process(self, handler_input):
-        data.begin_request()
+        data.begin_request(device_mapping.get_player_for_device(_device_id_from(handler_input)))
         context = getattr(handler_input.request_envelope, 'context', None)
         system = getattr(context, 'system', None)
         device = getattr(system, 'device', None)
