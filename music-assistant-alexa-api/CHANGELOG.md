@@ -1,3 +1,7 @@
+## 1.3.8
+
+- Normalize repeated "radio" prefixes emitted by Alexa routines before searching saved stations.
+
 ## 1.3.7
 
 - Normalize spoken radio names before searching saved stations, avoiding provider false matches and timeouts.

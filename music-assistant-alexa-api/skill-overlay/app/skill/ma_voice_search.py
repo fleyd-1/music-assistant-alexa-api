@@ -41,7 +41,9 @@ async def find_media(client, query, media_type):
         # Alexa often includes "radio" in the slot value, while MA's saved
         # station search indexes the station name itself. Try the concise name
         # first so a library hit does not depend on a slower provider search.
-        concise = re.sub(r"^(?:radio|rádio)\s+", "", query.strip(), flags=re.I)
+        # Alexa routines can prepend "rádio" while the station slot also
+        # contains it (for example, "tocar a rádio rádio RFM").
+        concise = re.sub(r"^(?:(?:radio|rádio)\s+)+", "", query.strip(), flags=re.I)
         concise = re.sub(r"\s+(?:radio|rádio)\s+de\s+autor$", "", concise,
                          flags=re.I).strip()
         if concise and _normal(concise) != _normal(query):

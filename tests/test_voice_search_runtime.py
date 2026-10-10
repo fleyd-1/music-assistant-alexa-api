@@ -107,7 +107,9 @@ def test_radio_prefers_saved_library_station():
 
 @pytest.mark.parametrize(("query", "expected"), [
     ("rádio RFM", "RFM"),
+    ("rádio rádio RFM", "RFM"),
     ("rádio futura rádio de autor", "futura"),
+    ("rádio rádio Futura rádio de autor", "Futura"),
 ])
 def test_radio_searches_concise_saved_station_name_first(query, expected):
     import asyncio
