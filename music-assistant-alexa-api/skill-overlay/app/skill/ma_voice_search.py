@@ -21,7 +21,7 @@ from music_assistant_models.errors import MusicAssistantError
 logger = logging.getLogger(__name__)
 
 _PUSH_TIMEOUT = 3.0
-_REQUEST_TIMEOUT = 5.0
+_REQUEST_TIMEOUT = 6.5
 
 
 class SearchPlaybackError(Exception):
@@ -44,8 +44,12 @@ async def find_media(client, query, media_type):
             queries.insert(0, title)
     for search in queries:
         results = await client.music.search(search_query=search,
-            media_types=[MediaType(media_type)], limit=20)
+            media_types=[MediaType(media_type)], limit=20, library_only=True)
         items = getattr(results, "tracks" if media_type == "track" else "radio", [])
+        if not items:
+            results = await client.music.search(search_query=search,
+                media_types=[MediaType(media_type)], limit=20)
+            items = getattr(results, "tracks" if media_type == "track" else "radio", [])
         items = [x for x in items if getattr(x, "uri", None)]
         if artist:
             items = [x for x in items if _normal(getattr(x, "name", "")) == _normal(title)

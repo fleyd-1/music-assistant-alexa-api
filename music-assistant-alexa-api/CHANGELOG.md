@@ -1,3 +1,8 @@
+## 1.3.5
+
+- Route both flow and single/radio streams to the correct Echo.
+- Search saved media before online providers and allow a bounded 6.5-second search/start budget.
+
 ## 1.3.4
 
 - Align Portuguese invocation and playback samples with the Music Assistant provider.

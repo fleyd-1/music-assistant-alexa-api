@@ -21,7 +21,7 @@ def get_ma(player_id=None):
 def stream_player(payload):
     parts = urlsplit(payload.get("streamUrl", "")).path.split("/")
     # MA flow URLs: /flow/<server-id>/<queue-id>/<stream-id>/<filename>
-    if len(parts) >= 6 and parts[1] == "flow":
+    if len(parts) >= 6 and parts[1] in ("flow", "single"):
         return unquote(parts[3])
     return payload.get("player_id")
 

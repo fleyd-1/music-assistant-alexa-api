@@ -4,7 +4,7 @@ from skill import lambda_function as handlers
 
 def test_streams_are_isolated_by_music_assistant_player():
     shared_store.set_ma({'streamUrl': 'https://music.example/flow/server/Dot/stream/Dot.mp3'})
-    shared_store.set_ma({'streamUrl': 'https://music.example/flow/server/Flex/stream/Flex.mp3'})
+    shared_store.set_ma({'streamUrl': 'https://music.example/single/server/Flex/stream/Flex.mp3'})
     assert '/Dot/' in shared_store.get_ma('Dot')['streamUrl']
     assert '/Flex/' in shared_store.get_ma('Flex')['streamUrl']
     assert shared_store.get_ma('Unknown') is None
