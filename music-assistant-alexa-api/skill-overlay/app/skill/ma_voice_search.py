@@ -37,6 +37,21 @@ def _normal(value):
 async def find_media(client, query, media_type):
     """Prefer the library; split title/artist only when metadata verifies both."""
     queries = [query]
+    if media_type == "artist":
+        for library_only in (True, False):
+            results = await client.music.search(
+                search_query=query,
+                media_types=[MediaType.ARTIST],
+                limit=20,
+                library_only=library_only,
+            )
+            items = [item for item in getattr(results, "artists", [])
+                     if getattr(item, "uri", None)
+                     and _normal(getattr(item, "name", "")) == _normal(query)]
+            if items:
+                return min(items, key=lambda item: not item.uri.startswith("library://"))
+        raise SearchPlaybackError("not_found")
+
     if media_type == "radio":
         # Alexa often includes "radio" in the slot value, while MA's saved
         # station search indexes the station name itself. Try the concise name

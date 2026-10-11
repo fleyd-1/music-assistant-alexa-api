@@ -208,6 +208,7 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
     INTENT_TYPES = {
         "PlayTrackIntent": "track",
+        "PlayArtistIntent": "artist",
         "PlayRadioIntent": "radio",
     }
 
@@ -228,7 +229,7 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
         if not query:
             handler_input.response_builder.speak(
-                "Diz o nome da música ou da rádio que queres ouvir."
+                "Diz o nome do artista, da música ou da rádio que queres ouvir."
             ).set_should_end_session(True)
             return handler_input.response_builder.response
 

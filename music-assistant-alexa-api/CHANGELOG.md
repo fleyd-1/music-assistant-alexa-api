@@ -1,3 +1,7 @@
+## 1.3.9
+
+- Add one-sentence Portuguese requests to play an artist through the Music Assistant Alexa skill.
+
 ## 1.3.8
 
 - Normalize repeated "radio" prefixes emitted by Alexa routines before searching saved stations.
