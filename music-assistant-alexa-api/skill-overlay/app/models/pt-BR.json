@@ -21,6 +21,25 @@
           "samples": []
         },
         {
+          "name": "PlayArtistIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "toca música da {query}",
+            "toca músicas da {query}",
+            "toca música do {query}",
+            "toca músicas de {query}",
+            "reproduz música de {query}",
+            "reproduz músicas de {query}",
+            "tocar música da {query}",
+            "tocar músicas de {query}"
+          ]
+        },
+        {
           "name": "PlayTrackIntent",
           "slots": [
             {

@@ -17,6 +17,7 @@ sys.path[:0] = [os.environ["SKILL_APP_PATH"]] if os.environ.get("SKILL_APP_PATH"
 
 @pytest.mark.parametrize(("media_type", "result_attr", "uri"), [
     ("track", "tracks", "spotify://track/123"),
+    ("artist", "artists", "library://artist/iza"),
     ("radio", "radio", "radiobrowser://station/456"),
 ])
 def test_voice_search_plays_result_and_waits_for_pushed_stream(
@@ -30,7 +31,8 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
     voice = importlib.import_module("skill.ma_voice_search")
 
     shared_store.set_ma({"streamUrl": "https://old.example/old.mp3"})
-    selected = SimpleNamespace(uri=uri)
+    selected = SimpleNamespace(uri=uri, name={
+        "artist": "IZA", "radio": "Other Radio"}.get(media_type))
     called = {}
 
     class FakeClient:
@@ -60,9 +62,10 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
         "MA_API_TOKEN": "test-token",
     }.get(key))
 
-    stream = voice.play_search_result("Sola Sistim Underworld", media_type, "echo-dot")
+    query = "IZA" if media_type == "artist" else "Sola Sistim Underworld"
+    stream = voice.play_search_result(query, media_type, "echo-dot")
 
-    assert called["search"]["search_query"] == "Sola Sistim Underworld"
+    assert called["search"]["search_query"] == query
     assert called["play"]["queue_id"] == "echo-dot"
     assert called["play"]["media"] == uri
     assert called["play"]["option"].value == "replace"
@@ -81,6 +84,35 @@ def test_title_and_artist_are_verified(query):
         return SimpleNamespace(tracks=[wrong, good] if kwargs['search_query'] == 'Sola Sistim' else [])
     client = SimpleNamespace(music=SimpleNamespace(search=search))
     assert asyncio.run(find_media(client, query, 'track')) is good
+
+
+def test_artist_search_plays_exact_music_assistant_artist():
+    import asyncio
+    from music_assistant_models.enums import MediaType
+    from skill.ma_voice_search import find_media
+    calls = []
+    iza = SimpleNamespace(uri='library://artist/182', name='IZA')
+
+    async def search(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(artists=[iza])
+
+    result = asyncio.run(find_media(
+        SimpleNamespace(music=SimpleNamespace(search=search)), 'IZA', 'artist'))
+    assert result is iza
+    assert calls[0]['media_types'] == [MediaType.ARTIST]
+    assert calls[0]['library_only'] is True
+
+
+def test_artist_search_does_not_choose_a_partial_or_different_artist():
+    import asyncio
+    from skill.ma_voice_search import find_media, SearchPlaybackError
+    async def search(**kwargs):
+        return SimpleNamespace(artists=[SimpleNamespace(
+            uri='library://artist/1', name='IZA Tribute')])
+    with pytest.raises(SearchPlaybackError, match='not_found'):
+        asyncio.run(find_media(
+            SimpleNamespace(music=SimpleNamespace(search=search)), 'IZA', 'artist'))
 
 
 def test_unknown_artist_does_not_play_another_artist():
