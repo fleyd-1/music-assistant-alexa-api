@@ -27,6 +27,33 @@ def test_launch_without_stream_keeps_session_open(monkeypatch):
     assert not response.get('directives')
 
 
+def test_joana_intent_routes_by_request_device_and_rejects_unknown(monkeypatch):
+    seen = []
+    mapping = {'dot-device': "Inês's Echo Dot", 'flex-device': "Inês's Echo Flex"}
+    monkeypatch.setattr(handlers.device_mapping, 'get_player_for_device', mapping.get)
+    monkeypatch.setattr(handlers.ma_voice_search, 'play_latest_joana', seen.append)
+    monkeypatch.setattr(handlers.data, 'begin_request', lambda player_id: None)
+    monkeypatch.setattr(handlers, '_get_stream_url', lambda request: ('https://audio.example/episode.mp3', {}))
+
+    def fake_play(**kwargs):
+        return kwargs['response_builder'].speak('A tocar a Joana.').set_should_end_session(True).response
+
+    monkeypatch.setattr(handlers.util, 'play', fake_play)
+
+    for device_id in ('dot-device', 'flex-device', 'unknown-device'):
+        payload = {'version': '1.0', 'session': {'new': True, 'sessionId': 'test'},
+            'context': {'System': {'application': {'applicationId': 'test'},
+                'user': {'userId': 'test'}, 'device': {'deviceId': device_id,
+                'supportedInterfaces': {'AudioPlayer': {}}}}},
+            'request': {'type': 'IntentRequest', 'requestId': 'test',
+                'timestamp': '2026-10-10T17:00:00Z', 'locale': 'pt-BR',
+                'intent': {'name': 'LatestJoanaIntent', 'confirmationStatus': 'NONE'}}}
+        result = handlers.lambda_handler(payload, None)['response']
+        assert 'outputSpeech' in result
+
+    assert seen == ["Inês's Echo Dot", "Inês's Echo Flex"]
+
+
 def test_launch_with_expired_stream_prompts_instead_of_ending(monkeypatch, caplog):
     expired = 'https://music.example/single/secret-token/Dot/expired/Dot.mp3'
     monkeypatch.setattr(handlers, '_get_stream_url', lambda request: (expired, {}))

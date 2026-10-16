@@ -21,6 +21,16 @@
           "samples": []
         },
         {
+          "name": "LatestJoanaIntent",
+          "slots": [],
+          "samples": [
+            "quero ouvir a Joana",
+            "toca a Joana",
+            "toca o último episódio de Extremamente Desagradável",
+            "reproduz o episódio mais recente de Extremamente Desagradável"
+          ]
+        },
+        {
           "name": "PlayArtistIntent",
           "slots": [
             {

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 _PUSH_TIMEOUT = 3.0
 _REQUEST_TIMEOUT = 6.5
 _FUTURA_STREAM_URI = "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
+_JOANA_PODCAST_URI = "library://podcast/1"
 
 
 class SearchPlaybackError(Exception):
@@ -174,4 +175,54 @@ def play_search_result(query, media_type, player_id):
         raise SearchPlaybackError("timeout") from None
     except Exception:
         logger.exception("Unexpected Music Assistant voice-search failure")
+        raise SearchPlaybackError("api_error") from None
+
+
+async def _play_latest_joana(player_id, old_version, server_url, token):
+    async with aiohttp.ClientSession() as session:
+        async with MusicAssistantClient(server_url, session, token=token) as client:
+            podcast = await client.music.get_item_by_uri(_JOANA_PODCAST_URI)
+            if getattr(podcast, "media_type", None) != MediaType.PODCAST:
+                raise SearchPlaybackError("not_found")
+            queue = await client.player_queues.get_active_queue(player_id)
+            if queue is None:
+                raise SearchPlaybackError("player_unavailable")
+            await client.player_queues.play_media(
+                queue_id=queue.queue_id,
+                media=_JOANA_PODCAST_URI,
+                option=QueueOption.REPLACE,
+                start_item="latest",
+            )
+
+    deadline = time.monotonic() + _PUSH_TIMEOUT
+    while time.monotonic() < deadline:
+        current = shared_store.get_ma(player_id) or {}
+        if current.get("version", 0) > old_version and current.get("streamUrl"):
+            return current
+        await asyncio.sleep(0.1)
+    raise SearchPlaybackError("stream_timeout")
+
+
+def play_latest_joana(player_id):
+    """Play the newest library episode on the requesting Echo's MA queue."""
+    server_url = get_env_secret("MA_API_URL")
+    token = get_env_secret("MA_API_TOKEN")
+    if not server_url or not token:
+        raise SearchPlaybackError("missing_api")
+
+    old_version = (shared_store.get_ma(player_id) or {}).get("version", 0)
+    try:
+        return asyncio.run(asyncio.wait_for(
+            _play_latest_joana(player_id, old_version, server_url, token),
+            timeout=_REQUEST_TIMEOUT,
+        ))
+    except SearchPlaybackError:
+        raise
+    except (CannotConnect, ConnectionFailed, InvalidServerVersion, MusicAssistantError):
+        logger.exception("Music Assistant podcast playback failed")
+        raise SearchPlaybackError("api_error") from None
+    except asyncio.TimeoutError:
+        raise SearchPlaybackError("timeout") from None
+    except Exception:
+        logger.exception("Unexpected Music Assistant podcast playback failure")
         raise SearchPlaybackError("api_error") from None
