@@ -11,6 +11,7 @@ from ask_sdk_model.interfaces.alexa.presentation.apl import (
 )
 from ask_sdk_model.interfaces.audioplayer import (
     AudioItem,
+    AudioItemMetadata,
     ClearBehavior,
     ClearQueueDirective,
     PlayBehavior,
@@ -18,9 +19,15 @@ from ask_sdk_model.interfaces.audioplayer import (
     StopDirective,
     Stream,
 )
+from ask_sdk_model.interfaces.display import Image, ImageInstance
 
 from . import data
 from .apl import add_apl
+
+_FALLBACK_ART_URL = (
+    "https://raw.githubusercontent.com/timlaing/music-assistant-alexa-skill/"
+    "main/assets/icons/ma_512x512.png"
+)
 
 
 def apl_enabled():
@@ -86,6 +93,21 @@ def push_alexa_metadata(url):
     shared_store.set_alexa(payload)
 
 
+def _audio_metadata():
+    """Build screen metadata from the latest Music Assistant push."""
+    info = data.get_info()
+    title = (info.get("primaryText") or "Music Assistant").strip()
+    subtitle = (info.get("secondaryText") or "Music Assistant").strip()
+    art_url = (info.get("coverImageSource") or _FALLBACK_ART_URL).strip()
+    background_url = (info.get("backgroundImageSource") or art_url).strip()
+    return AudioItemMetadata(
+        title=title,
+        subtitle=subtitle,
+        art=Image(sources=[ImageInstance(url=art_url)]),
+        background_image=Image(sources=[ImageInstance(url=background_url)]),
+    )
+
+
 def play(url, offset, text, response_builder, supports_apl=False, unreachable_prompt=None):
     def unreachable():
         if unreachable_prompt:
@@ -143,7 +165,8 @@ def play(url, offset, text, response_builder, supports_apl=False, unreachable_pr
                         url=url,
                         offset_in_milliseconds=offset,
                         expected_previous_token=None
-                    )
+                    ),
+                    metadata=_audio_metadata(),
                 )
             )
         )

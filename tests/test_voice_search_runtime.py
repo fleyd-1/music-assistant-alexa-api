@@ -15,6 +15,61 @@ sys.path[:0] = [os.environ["SKILL_APP_PATH"]] if os.environ.get("SKILL_APP_PATH"
 ]
 
 
+@pytest.mark.parametrize("player_id", ["Inês's Echo Dot", "Inês's Echo Flex"])
+def test_latest_joana_uses_requesting_player_queue(monkeypatch, player_id):
+    import shared_store
+    import skill
+    from music_assistant_models.enums import MediaType
+
+    if not os.environ.get("SKILL_APP_PATH"):
+        skill.__path__.insert(0, str(ADDON / "skill-overlay/app/skill"))
+    voice = importlib.import_module("skill.ma_voice_search")
+    called = {}
+
+    class FakeClient:
+        def __init__(self, server_url, session, token=None):
+            self.music = SimpleNamespace(get_item_by_uri=self.get_item_by_uri)
+            self.player_queues = SimpleNamespace(
+                get_active_queue=self.get_active_queue, play_media=self.play_media)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get_item_by_uri(self, uri):
+            called["podcast_uri"] = uri
+            return SimpleNamespace(media_type=MediaType.PODCAST)
+
+        async def get_active_queue(self, requested_player):
+            called["player_id"] = requested_player
+            return SimpleNamespace(queue_id=f"queue:{requested_player}")
+
+        async def play_media(self, **kwargs):
+            called["play"] = kwargs
+            shared_store.set_ma({
+                "streamUrl": "https://streams.example/new-episode.mp3",
+                "player_id": player_id,
+            })
+
+    monkeypatch.setattr(voice, "MusicAssistantClient", FakeClient)
+    monkeypatch.setattr(voice, "get_env_secret", lambda key: {
+        "MA_API_URL": "http://music-assistant:8095",
+        "MA_API_TOKEN": "test-token",
+    }.get(key))
+
+    stream = voice.play_latest_joana(player_id)
+
+    assert called["podcast_uri"] == "library://podcast/1"
+    assert called["player_id"] == player_id
+    assert called["play"]["queue_id"] == f"queue:{player_id}"
+    assert called["play"]["media"] == "library://podcast/1"
+    assert called["play"]["start_item"] == "latest"
+    assert called["play"]["option"].value == "replace"
+    assert stream["player_id"] == player_id
+
+
 @pytest.mark.parametrize(("media_type", "result_attr", "uri"), [
     ("track", "tracks", "spotify://track/123"),
     ("artist", "artists", "library://artist/iza"),

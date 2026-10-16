@@ -97,8 +97,13 @@ Next, previous and start-over route to the mapped MA player. Pause, stop and
 resume also synchronize mapped players while retaining Alexa AudioPlayer handling
 and one-shot suppression of commands echoed back by MA.
 Set `enable_apl: true` to opt into Echo Show artwork and controls; it defaults
-to false. `skip_url_validation` remains false unless local routing prevents
-this container from checking a stream which the Echo can reach publicly.
+to false. Standard AudioPlayer playback now includes the current Music Assistant
+title, subtitle, cover art and background image even when APL is disabled. The
+2024 Echo Spot displays the title, subtitle and cover art without APL; richer
+APL controls remain available on supported Echo Show devices. See Amazon's
+[AudioPlayer metadata reference](https://developer.amazon.com/en-US/docs/alexa/custom-skills/audioplayer-interface-reference.html).
+`skip_url_validation` remains false unless local routing prevents this
+container from checking a stream which the Echo can reach publicly.
 
 ### Search for a specific track or radio by voice
 
@@ -111,6 +116,19 @@ The skill searches Music Assistant for a track or radio and starts the first
 matching result on the Echo mapped to that Music Assistant player. This requires
 the optional Music Assistant control API URL/token above. Search results depend
 on the providers and library available in Music Assistant.
+
+### Play the latest Extremamente Desagradável episode
+
+The Portuguese `LatestJoanaIntent` selects the `Renascença - Extremamente
+Desagradável` podcast in the Music Assistant library and asks its active queue
+to play `start_item: latest` on the Echo that made the request. The URI and
+player mapping are checked before playback; no episode URL or destination Echo
+is hard-coded.
+
+For a direct skill request, say “Alexa, pede ao Music Assistant para tocar a
+Joana”. To use the shorter “Alexa, toca a Joana”, create an Alexa Routine with
+that voice trigger and the custom action “pede ao Music Assistant para tocar a
+Joana”. A custom skill still needs its invocation name in a direct request.
 
 ## Skill Setup
 

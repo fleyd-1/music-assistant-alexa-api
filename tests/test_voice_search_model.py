@@ -19,6 +19,8 @@ def test_portuguese_voice_search_intents_are_configured():
     assert "toca músicas da {query}" in by_name["PlayArtistIntent"]["samples"]
     assert "tocar músicas de {query}" in by_name["PlayArtistIntent"]["samples"]
     assert "toca a rádio {query}" in by_name["PlayRadioIntent"]["samples"]
+    assert by_name["LatestJoanaIntent"]["slots"] == []
+    assert "quero ouvir a Joana" in by_name["LatestJoanaIntent"]["samples"]
 
     # Keep the no-slot legacy playback intent from stealing track/radio
     # queries before Alexa can populate the SearchQuery slot.

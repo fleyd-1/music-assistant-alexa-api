@@ -203,6 +203,51 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
         )
 
 
+class LatestJoanaIntentHandler(AbstractRequestHandler):
+    """Play the newest Extremamente Desagradável episode on this Echo."""
+
+    def can_handle(self, handler_input):
+        return is_intent_name("LatestJoanaIntent")(handler_input)
+
+    def handle(self, handler_input):
+        request = handler_input.request_envelope.request
+        player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
+        if not player_id:
+            handler_input.response_builder.speak(
+                "Esta coluna ainda não está associada a um leitor do Music Assistant."
+            ).set_should_end_session(True)
+            return handler_input.response_builder.response
+
+        try:
+            ma_voice_search.play_latest_joana(player_id)
+            data.begin_request(player_id)
+            url, _audio = _get_stream_url(request)
+            if not url:
+                raise ma_voice_search.SearchPlaybackError("stream_timeout")
+        except ma_voice_search.SearchPlaybackError as err:
+            messages = {
+                "not_found": "Não encontrei o podcast no Music Assistant.",
+                "player_unavailable": "Esta coluna não está disponível no Music Assistant.",
+                "missing_api": "A ligação ao Music Assistant não está configurada.",
+                "stream_timeout": "O Music Assistant não enviou o episódio a tempo. Tenta novamente.",
+                "timeout": "A procura do episódio demorou demasiado. Tenta novamente.",
+                "api_error": "Não consegui iniciar o episódio no Music Assistant.",
+            }
+            handler_input.response_builder.speak(
+                messages.get(str(err), messages["api_error"])
+            ).set_should_end_session(True)
+            return handler_input.response_builder.response
+
+        title = data.get_info().get("primaryText") or "o último Extremamente Desagradável"
+        return util.play(
+            url=url,
+            offset=0,
+            text=f"A tocar {title}.",
+            response_builder=handler_input.response_builder,
+            supports_apl=_supports_apl(handler_input),
+        )
+
+
 class SpecificMediaIntentHandler(AbstractRequestHandler):
     """Search for a requested track or radio station in Music Assistant."""
 
@@ -876,6 +921,7 @@ class ResponseLogger(AbstractResponseInterceptor):
 sb.add_request_handler(CheckAudioInterfaceHandler())
 sb.add_request_handler(SkillEventHandler())
 sb.add_request_handler(LaunchRequestOrPlayAudioHandler())
+sb.add_request_handler(LatestJoanaIntentHandler())
 sb.add_request_handler(SpecificMediaIntentHandler())
 sb.add_request_handler(PlayCommandHandler())
 sb.add_request_handler(HelpIntentHandler())
