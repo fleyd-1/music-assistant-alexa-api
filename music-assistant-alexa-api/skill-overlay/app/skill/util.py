@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 import threading
+import time
+from hashlib import sha256
 
 import requests
 from app_settings import get_setting
@@ -40,6 +42,45 @@ def apl_enabled():
 # we're replaying the same stream - the offset only makes sense for that same URL.
 _last_stopped = {}
 _last_stopped_lock = threading.Lock()
+_playback_requests = {}
+_PLAYBACK_REQUEST_TTL = 300
+
+
+def _stream_id(url):
+    """Return a short correlation ID without retaining or logging the stream URL."""
+    return sha256(url.encode("utf-8")).hexdigest()[:16]
+
+
+def record_playback_request(url, request_id):
+    if not url or not request_id:
+        return None
+    stream_id = _stream_id(url)
+    now = time.monotonic()
+    with _last_stopped_lock:
+        _playback_requests[stream_id] = (request_id, now)
+        expired = [key for key, (_, created) in _playback_requests.items()
+                   if now - created > _PLAYBACK_REQUEST_TTL]
+        for key in expired:
+            _playback_requests.pop(key, None)
+        while len(_playback_requests) > 128:
+            oldest = min(_playback_requests, key=lambda key: _playback_requests[key][1])
+            _playback_requests.pop(oldest, None)
+    return stream_id
+
+
+def get_playback_request_id(url):
+    if not url:
+        return None
+    stream_id = _stream_id(url)
+    now = time.monotonic()
+    with _last_stopped_lock:
+        entry = _playback_requests.get(stream_id)
+        if entry is None:
+            return None
+        if now - entry[1] > _PLAYBACK_REQUEST_TTL:
+            _playback_requests.pop(stream_id, None)
+            return None
+        return entry[0]
 
 
 def record_stopped_position(device_id, url, offset_ms):
@@ -165,6 +206,7 @@ def play(url, offset, text, response_builder, supports_apl=False,
                 logging.warning('Audio URL request failed: %s', type(exc).__name__)
                 return unreachable()
 
+        stream_id = record_playback_request(url, request_id)
         response_builder.add_directive(
             PlayDirective(
                 play_behavior=PlayBehavior.REPLACE_ALL,
@@ -180,7 +222,10 @@ def play(url, offset, text, response_builder, supports_apl=False,
             )
         )
         response_builder.set_should_end_session(True)
-        logging.info('AudioPlayer.Play response prepared request_id=%s', request_id or 'unknown')
+        logging.info(
+            'AudioPlayer.Play response prepared request_id=%s stream_id=%s',
+            request_id or 'unknown', stream_id or 'untracked'
+        )
 
     if text:
         response_builder.speak(text)

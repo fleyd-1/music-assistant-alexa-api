@@ -584,8 +584,13 @@ class PlaybackStartedHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         request = handler_input.request_envelope.request
-        logger.info("AudioPlayer.PlaybackStarted request_id=%s",
-                    getattr(request, "request_id", "unknown"))
+        stream_url = getattr(request, "token", None)
+        logger.info(
+            "AudioPlayer.PlaybackStarted event_request_id=%s voice_request_id=%s player_id=%s",
+            getattr(request, "request_id", "unknown"),
+            util.get_playback_request_id(stream_url) or "unknown",
+            device_mapping.get_player_for_device(_device_id_from(handler_input)) or "unknown",
+        )
         return handler_input.response_builder.response
 
 class PlaybackFinishedHandler(AbstractRequestHandler):
@@ -661,10 +666,14 @@ class PlaybackFailedHandler(AbstractRequestHandler):
         # type: (HandlerInput) -> Response
         request = handler_input.request_envelope.request
         error = getattr(request, "error", None)
-        logger.warning("AudioPlayer.PlaybackFailed request_id=%s code=%s type=%s",
-                       getattr(request, "request_id", "unknown"),
-                       getattr(error, "error_code", None),
-                       getattr(error, "error_type", None))
+        logger.warning(
+            "AudioPlayer.PlaybackFailed event_request_id=%s voice_request_id=%s "
+            "player_id=%s code=%s type=%s",
+            getattr(request, "request_id", "unknown"),
+            util.get_playback_request_id(getattr(request, "token", None)) or "unknown",
+            device_mapping.get_player_for_device(_device_id_from(handler_input)) or "unknown",
+            getattr(error, "error_code", None), getattr(error, "error_type", None),
+        )
         # Await a new play request rather than restart a failed/stale stream.
         return handler_input.response_builder.response
 

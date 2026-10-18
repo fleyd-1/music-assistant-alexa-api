@@ -268,3 +268,19 @@ def test_ma_play_response_skips_synchronous_stream_url_probe(monkeypatch):
     assert len(response.directives) == 1
     assert response.directives[0].object_type == "AudioPlayer.Play"
     head.assert_not_called()
+
+
+def test_playback_event_correlation_does_not_retain_or_log_stream_url(caplog):
+    overlay_util_path = PROJECT / "skill-overlay" / "app" / "skill" / "util.py"
+    spec = importlib.util.spec_from_file_location("skill.overlay_util_correlation", overlay_util_path)
+    util = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(util)
+    url = "https://private.example/flow/secret-stream-token/file.mp3"
+
+    with caplog.at_level("INFO"):
+        stream_id = util.record_playback_request(url, "alexa-request-123")
+
+    assert stream_id
+    assert util.get_playback_request_id(url) == "alexa-request-123"
+    assert "private.example" not in caplog.text
+    assert "secret-stream-token" not in caplog.text
