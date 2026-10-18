@@ -3,6 +3,7 @@
 import gettext
 import logging
 import os
+import time
 
 from ask_sdk.standard import StandardSkillBuilder
 from ask_sdk_core.dispatch_components import (
@@ -200,6 +201,7 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
             response_builder=handler_input.response_builder,
             supports_apl=_supports_apl(handler_input),
             unreachable_prompt=prompt,
+            request_id=getattr(request, "request_id", None),
         )
 
 
@@ -211,13 +213,18 @@ class LatestJoanaIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         request = handler_input.request_envelope.request
+        request_id = getattr(request, "request_id", None) or "unknown"
+        request_started = time.monotonic()
         player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
         if not player_id:
+            logger.warning("Music Assistant intent=LatestJoanaIntent has no player mapping")
             handler_input.response_builder.speak(
                 "Esta coluna ainda não está associada a um leitor do Music Assistant."
             ).set_should_end_session(True)
             return handler_input.response_builder.response
 
+        logger.info("Alexa request_id=%s intent=LatestJoanaIntent player_id=%s",
+                    request_id, player_id)
         try:
             ma_voice_search.play_latest_joana(player_id)
             data.begin_request(player_id)
@@ -230,7 +237,7 @@ class LatestJoanaIntentHandler(AbstractRequestHandler):
                 "player_unavailable": "Esta coluna não está disponível no Music Assistant.",
                 "missing_api": "A ligação ao Music Assistant não está configurada.",
                 "stream_timeout": "O Music Assistant não enviou o episódio a tempo. Tenta novamente.",
-                "timeout": "A procura do episódio demorou demasiado. Tenta novamente.",
+                "timeout": "O Music Assistant demorou demasiado a preparar o episódio. Tenta novamente.",
                 "api_error": "Não consegui iniciar o episódio no Music Assistant.",
             }
             handler_input.response_builder.speak(
@@ -239,13 +246,18 @@ class LatestJoanaIntentHandler(AbstractRequestHandler):
             return handler_input.response_builder.response
 
         title = data.get_info().get("primaryText") or "o último Extremamente Desagradável"
-        return util.play(
+        response = util.play(
             url=url,
             offset=0,
             text=f"A tocar {title}.",
             response_builder=handler_input.response_builder,
             supports_apl=_supports_apl(handler_input),
+            validate_url=False,
+            request_id=request_id,
         )
+        logger.info("Alexa request_id=%s stage=response_ready total_ms=%.1f",
+                    request_id, (time.monotonic() - request_started) * 1000)
+        return response
 
 
 class SpecificMediaIntentHandler(AbstractRequestHandler):
@@ -264,8 +276,12 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         request = handler_input.request_envelope.request
+        request_id = getattr(request, "request_id", None) or "unknown"
+        request_started = time.monotonic()
         intent_name = request.intent.name
         media_type = self.INTENT_TYPES[intent_name]
+        logger.info("Alexa request received request_id=%s intent=%s",
+                    request_id, intent_name)
         query = ""
         for slot in (getattr(request.intent, "slots", None) or {}).values():
             if getattr(slot, "value", None):
@@ -280,13 +296,19 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
         player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
         if not player_id:
+            logger.warning("Music Assistant intent=%s query=%r has no player mapping",
+                           intent_name, query)
             handler_input.response_builder.speak(
                 "Esta coluna ainda não está associada a um leitor do Music Assistant."
             ).set_should_end_session(True)
             return handler_input.response_builder.response
 
+        logger.info("Alexa request_id=%s intent=%s recognized_query=%r player_id=%s",
+                    request_id, intent_name, query, player_id)
         try:
-            ma_voice_search.play_search_result(query, media_type, player_id)
+            ma_voice_search.play_search_result(
+                query, media_type, player_id, request_id=request_id
+            )
             # Refresh the per-request snapshot after MA has pushed the new URL.
             data.begin_request(device_mapping.get_player_for_device(_device_id_from(handler_input)))
             url, _audio = _get_stream_url(request)
@@ -297,20 +319,25 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
                 "not_found": "Não encontrei isso no Music Assistant.",
                 "missing_api": "A pesquisa por voz ainda não está configurada no Music Assistant.",
                 "stream_timeout": "O Music Assistant não enviou o áudio a tempo. Tenta novamente.",
-                "timeout": "A pesquisa demorou demasiado. Tenta novamente.",
+                "timeout": "O Music Assistant demorou demasiado a preparar o áudio. Tenta novamente.",
                 "api_error": "Não consegui pesquisar no Music Assistant. Verifica a ligação da API.",
             }
             handler_input.response_builder.speak(messages.get(str(err), messages["api_error"])).set_should_end_session(True)
             return handler_input.response_builder.response
 
         title = data.get_info().get("primaryText") or query
-        return util.play(
+        response = util.play(
             url=url,
             offset=0,
             text=f"A tocar {title}.",
             response_builder=handler_input.response_builder,
             supports_apl=_supports_apl(handler_input),
+            validate_url=False,
+            request_id=request_id,
         )
+        logger.info("Alexa request_id=%s stage=response_ready total_ms=%.1f",
+                    request_id, (time.monotonic() - request_started) * 1000)
+        return response
 
 
 class HelpIntentHandler(AbstractRequestHandler):
@@ -485,7 +512,8 @@ class ResumeIntentHandler(AbstractRequestHandler):
             offset=offset,
             text=data.WELCOME_MSG,
             response_builder=handler_input.response_builder,
-            supports_apl=_supports_apl(handler_input)
+            supports_apl=_supports_apl(handler_input),
+            request_id=getattr(request, "request_id", None),
         )
 
 
@@ -555,8 +583,14 @@ class PlaybackStartedHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        logger.info("In PlaybackStartedHandler")
-        logger.info("Playback started")
+        request = handler_input.request_envelope.request
+        stream_url = getattr(request, "token", None)
+        logger.info(
+            "AudioPlayer.PlaybackStarted event_request_id=%s voice_request_id=%s player_id=%s",
+            getattr(request, "request_id", "unknown"),
+            util.get_playback_request_id(stream_url) or "unknown",
+            device_mapping.get_player_for_device(_device_id_from(handler_input)) or "unknown",
+        )
         return handler_input.response_builder.response
 
 class PlaybackFinishedHandler(AbstractRequestHandler):
@@ -630,9 +664,16 @@ class PlaybackFailedHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        logger.info("In PlaybackFailedHandler")
         request = handler_input.request_envelope.request
-        logger.info("Playback failed: {}".format(request.error))
+        error = getattr(request, "error", None)
+        logger.warning(
+            "AudioPlayer.PlaybackFailed event_request_id=%s voice_request_id=%s "
+            "player_id=%s code=%s type=%s",
+            getattr(request, "request_id", "unknown"),
+            util.get_playback_request_id(getattr(request, "token", None)) or "unknown",
+            device_mapping.get_player_for_device(_device_id_from(handler_input)) or "unknown",
+            getattr(error, "error_code", None), getattr(error, "error_type", None),
+        )
         # Await a new play request rather than restart a failed/stale stream.
         return handler_input.response_builder.response
 
@@ -750,7 +791,8 @@ class PlayCommandHandler(AbstractRequestHandler):
             offset=0,
             text=None,
             response_builder=handler_input.response_builder,
-            supports_apl=_supports_apl(handler_input)
+            supports_apl=_supports_apl(handler_input),
+            request_id=getattr(request, "request_id", None),
         )
 
 
