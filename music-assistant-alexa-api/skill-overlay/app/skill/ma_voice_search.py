@@ -5,6 +5,7 @@ import logging
 import re
 import unicodedata
 import time
+import uuid
 
 import aiohttp
 import shared_store
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _PUSH_TIMEOUT = 3.0
 _REQUEST_TIMEOUT = 6.5
+_ARTIST_QUEUE_LIMIT = 8
 _FUTURA_STREAM_URI = "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
 _JOANA_PODCAST_URI = "library://podcast/1"
 
@@ -35,121 +37,296 @@ def _normal(value):
         "NFKD", value.casefold()).encode("ascii", "ignore").decode()).split())
 
 
-async def find_media(client, query, media_type):
-    """Prefer the library; split title/artist only when metadata verifies both."""
-    queries = [query]
+def _log_stage(diag, stage, started, outcome="ok", **fields):
+    """Log a safe duration for one Music Assistant request stage."""
+    if diag is not None:
+        diag["stage"] = stage
+    details = " ".join(f"{key}={value!r}" for key, value in fields.items())
+    logger.info(
+        "MA voice request_id=%s stage=%s duration_ms=%.1f outcome=%s%s",
+        (diag or {}).get("request_id", "direct"), stage,
+        (time.monotonic() - started) * 1000, outcome,
+        f" {details}" if details else "",
+    )
+
+
+async def _search_results(client, query, media_types, library_only, diag):
+    """Run one timed MA search and return its result object."""
+    media_types = tuple(media_types)
+    scope = "library" if library_only else "global"
+    stage = f"search.{'+'.join(media_types)}.{scope}"
+    started = time.monotonic()
+    if diag is not None:
+        diag["stage"] = stage
+        diag["stage_started"] = started
+    try:
+        results = await client.music.search(
+            search_query=query,
+            media_types=[MediaType(item) for item in media_types],
+            limit=20,
+            library_only=library_only,
+        )
+    except Exception as err:
+        _log_stage(diag, stage, started, "error", query=query,
+                   error=type(err).__name__)
+        raise
+    fields = {"artist": "artists", "track": "tracks", "radio": "radio"}
+    result_counts = {
+        item: len(getattr(results, fields[item], None) or [])
+        for item in media_types
+    }
+    _log_stage(diag, stage, started, query=query, results=result_counts)
+    return results
+
+
+async def _search(client, query, media_type, library_only, diag):
+    """Run one timed MA search and return its matching media collection."""
+    results = await _search_results(client, query, (media_type,), library_only, diag)
+    key = {"artist": "artists", "track": "tracks", "radio": "radio"}[media_type]
+    return list(getattr(results, key, None) or [])
+
+
+def _best_library_item(items):
+    return min(items, key=lambda item: not item.uri.startswith("library://"))
+
+
+def _exact_title_artist_match(items, query):
+    """Match a title followed by one complete artist name, with no fuzzy fallback."""
+    normalized_query = _normal(query)
+    matches = []
+    for item in items:
+        title = getattr(item, "name", "")
+        if not title or not getattr(item, "uri", None):
+            continue
+        for artist in getattr(item, "artists", []) or []:
+            artist_name = getattr(artist, "name", "")
+            if artist_name and normalized_query == _normal(f"{title} {artist_name}"):
+                matches.append(item)
+                break
+    return matches
+
+
+def _log_selection(diag, item, media_type):
+    if diag is not None:
+        diag["selected_media_type"] = media_type.removesuffix("_fallback")
+    logger.info(
+        "MA voice request_id=%s selected_type=%s name=%r source=%s",
+        (diag or {}).get("request_id", "direct"), media_type,
+        getattr(item, "name", ""),
+        (getattr(item, "uri", "").split(":", 1)[0] or "unknown"),
+    )
+
+
+async def _artist_track_uris(client, artist, diag):
+    """Resolve a bounded list of tracks before queuing, avoiding MA's full-artist expansion."""
+    uri = getattr(artist, "uri", "")
+    provider, separator, resource = uri.partition("://")
+    path = resource.split("?", 1)[0].strip("/")
+    parts = path.split("/", 1)
+    if not separator or not provider or len(parts) != 2 or parts[0] != "artist":
+        raise SearchPlaybackError("not_found")
+
+    item_id = parts[1]
+    library_only = provider == "library"
+    stage = "artist_tracks.library" if library_only else "artist_tracks.provider"
+    started = time.monotonic()
+    if diag is not None:
+        diag["stage"] = stage
+        diag["stage_started"] = started
+    try:
+        tracks = await client.music.get_artist_tracks(
+            item_id=item_id,
+            provider_instance_id_or_domain=provider,
+            in_library_only=library_only,
+        )
+    except Exception as err:
+        _log_stage(diag, stage, started, "error", provider=provider,
+                   error=type(err).__name__)
+        raise
+
+    track_uris = [track.uri for track in tracks if getattr(track, "uri", None)]
+    selected = track_uris[:_ARTIST_QUEUE_LIMIT]
+    _log_stage(diag, stage, started, provider=provider,
+               returned=len(track_uris), queued=len(selected))
+    if not selected:
+        raise SearchPlaybackError("not_found")
+    return selected
+
+
+async def find_media(client, query, media_type, diag=None):
+    """Prefer exact library matches; broaden the search only when needed."""
     if media_type == "artist":
         for library_only in (True, False):
-            results = await client.music.search(
-                search_query=query,
-                media_types=[MediaType.ARTIST],
-                limit=20,
-                library_only=library_only,
-            )
-            items = [item for item in getattr(results, "artists", [])
-                     if getattr(item, "uri", None)
+            items = await _search(client, query, "artist", library_only, diag)
+            exact = [item for item in items if getattr(item, "uri", None)
                      and _normal(getattr(item, "name", "")) == _normal(query)]
-            if items:
-                return min(items, key=lambda item: not item.uri.startswith("library://"))
+            if exact:
+                selected = _best_library_item(exact)
+                _log_selection(diag, selected, "artist")
+                return selected
         raise SearchPlaybackError("not_found")
 
     if media_type == "radio":
-        # Alexa often includes "radio" in the slot value, while MA's saved
-        # station search indexes the station name itself. Try the concise name
-        # first so a library hit does not depend on a slower provider search.
-        # Alexa routines can prepend "rádio" while the station slot also
-        # contains it (for example, "tocar a rádio rádio RFM").
+        # Alexa can repeat the word "radio" in the station slot.
         concise = re.sub(r"^(?:(?:radio|rádio)\s+)+", "", query.strip(), flags=re.I)
         concise = re.sub(r"\s+(?:radio|rádio)\s+de\s+autor$", "", concise,
                          flags=re.I).strip()
+        searches = [query]
         if concise and _normal(concise) != _normal(query):
-            queries.insert(0, concise)
-        # Check all saved stations before broad provider searches. This keeps
-        # familiar station names such as "RFM" and "Futura" quick and stable.
-        for search in queries:
-            results = await client.music.search(search_query=search,
-                media_types=[MediaType.RADIO], limit=20, library_only=True)
-            items = [x for x in getattr(results, "radio", [])
-                     if getattr(x, "uri", None)]
-            if items:
-                return min(items, key=lambda x: not x.uri.startswith("library://"))
-        for search in queries:
-            results = await client.music.search(search_query=search,
-                media_types=[MediaType.RADIO], limit=20)
-            items = [x for x in getattr(results, "radio", [])
-                     if getattr(x, "uri", None)]
-            if items:
-                return min(items, key=lambda x: not x.uri.startswith("library://"))
+            searches.insert(0, concise)
+        for library_only in (True, False):
+            for search in searches:
+                items = await _search(client, search, "radio", library_only, diag)
+                items = [item for item in items if getattr(item, "uri", None)]
+                if items:
+                    selected = _best_library_item(items)
+                    _log_selection(diag, selected, "radio")
+                    return selected
         raise SearchPlaybackError("not_found")
 
-    title, artist = query, None
-    if media_type == "track":
-        parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
-        if len(parts) > 1:
-            title, artist = " de ".join(parts[:-1]), parts[-1]
-            queries.insert(0, title)
-    for search in queries:
-        results = await client.music.search(search_query=search,
-            media_types=[MediaType(media_type)], limit=20, library_only=True)
-        items = getattr(results, "tracks" if media_type == "track" else "radio", [])
-        if not items:
-            results = await client.music.search(search_query=search,
-                media_types=[MediaType(media_type)], limit=20)
-            items = getattr(results, "tracks" if media_type == "track" else "radio", [])
-        items = [x for x in items if getattr(x, "uri", None)]
-        if artist:
-            items = [x for x in items if _normal(getattr(x, "name", "")) == _normal(title)
-                     and any(_normal(a.name) == _normal(artist)
-                             for a in getattr(x, "artists", []))]
-        if items:
-            return min(items, key=lambda x: not x.uri.startswith("library://"))
-    # MA does not interpret a concatenated title + artist as a structured query.
-    # Try a bounded set of title prefixes, accepting only an exact metadata match.
-    if media_type == "track" and not artist:
-        words = query.split()
-        for count in range(1, min(4, len(words))):
-            title, artist = " ".join(words[:-count]), " ".join(words[-count:])
-            results = await client.music.search(search_query=title,
-                media_types=[MediaType.TRACK], limit=20)
-            for item in results.tracks:
-                if (_normal(item.name) == _normal(title) and
-                    any(_normal(a.name) == _normal(artist) for a in item.artists)):
-                    return item
+    if media_type != "track":
+        raise SearchPlaybackError("not_found")
+
+    # Search both library tracks and artists in one request. If Alexa routes a
+    # bare artist name to PlayTrackIntent, this avoids an unnecessary global
+    # provider search before the exact local artist fallback.
+    local_results = await _search_results(
+        client, query, ("track", "artist"), True, diag
+    )
+    exact_tracks = [item for item in (getattr(local_results, "tracks", None) or [])
+                    if getattr(item, "uri", None)
+                    and _normal(getattr(item, "name", "")) == _normal(query)]
+    if exact_tracks:
+        selected = _best_library_item(exact_tracks)
+        _log_selection(diag, selected, "track")
+        return selected
+
+    parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
+    if len(parts) == 1:
+        combined_local = _exact_title_artist_match(
+            getattr(local_results, "tracks", None) or [], query
+        )
+        if combined_local:
+            selected = _best_library_item(combined_local)
+            _log_selection(diag, selected, "track")
+            return selected
+        exact_local_artists = [item for item in (getattr(local_results, "artists", None) or [])
+                               if getattr(item, "uri", None)
+                               and _normal(getattr(item, "name", "")) == _normal(query)]
+        if exact_local_artists:
+            selected = _best_library_item(exact_local_artists)
+            _log_selection(diag, selected, "artist_fallback")
+            return selected
+
+    # MA global search can be fuzzy, so only an exact title can be selected.
+    items = await _search(client, query, "track", False, diag)
+    exact = [item for item in items if getattr(item, "uri", None)
+             and _normal(getattr(item, "name", "")) == _normal(query)]
+    if exact:
+        selected = _best_library_item(exact)
+        _log_selection(diag, selected, "track")
+        return selected
+    if len(parts) == 1:
+        combined_global = _exact_title_artist_match(items, query)
+        if combined_global:
+            selected = _best_library_item(combined_global)
+            _log_selection(diag, selected, "track")
+            return selected
+
+    # A title such as "Sonho de Elsa" must survive the parser unchanged when
+    # MA has an exact result. For title + artist phrases, verify both fields.
+    if len(parts) > 1:
+        title, artist = " ".join(parts[:-1]), parts[-1]
+        for library_only in (True, False):
+            items = await _search(client, title, "track", library_only, diag)
+            exact = [item for item in items if getattr(item, "uri", None)
+                     and _normal(getattr(item, "name", "")) == _normal(title)
+                     and any(_normal(getattr(a, "name", "")) == _normal(artist)
+                             for a in getattr(item, "artists", []))]
+            if exact:
+                selected = _best_library_item(exact)
+                _log_selection(diag, selected, "track")
+                return selected
+        raise SearchPlaybackError("not_found")
+
+    # A bare artist may not be in the local library; broaden only after the
+    # exact local track/artist check and exact global track check have failed.
+    items = await _search(client, query, "artist", False, diag)
+    exact = [item for item in items if getattr(item, "uri", None)
+             and _normal(getattr(item, "name", "")) == _normal(query)]
+    if exact:
+        selected = _best_library_item(exact)
+        _log_selection(diag, selected, "artist_fallback")
+        return selected
     raise SearchPlaybackError("not_found")
 
 
-async def _search_and_play(query, media_type, player_id, old_version, server_url, token):
+async def _search_and_play(query, media_type, player_id, old_version,
+                           server_url, token, diag):
     async with aiohttp.ClientSession() as session:
-        async with MusicAssistantClient(server_url, session, token=token) as client:
-            item = await find_media(client, query, media_type)
+        connection_started = time.monotonic()
+        diag["stage"] = "connect"
+        diag["stage_started"] = connection_started
+        connected = False
+        try:
+            async with MusicAssistantClient(server_url, session, token=token) as client:
+                connected = True
+                _log_stage(diag, "connect", connection_started)
+                item = await find_media(client, query, media_type, diag)
 
-            # The saved FUTURA entry still points at a dead mediatiquestream
-            # hostname. The station's own Radio.co stream is live; route this
-            # exact saved station through MA's built-in URL provider until its
-            # library entry can be replaced safely.
-            media_uri = item.uri
-            if (media_type == "radio" and
-                    _normal(getattr(item, "name", "")) == "futura radio de autor"):
-                media_uri = _FUTURA_STREAM_URI
+                # The saved FUTURA entry still points at a dead mediatiquestream
+                # hostname. The station's own Radio.co stream is live; route this
+                # exact saved station through MA's built-in URL provider until its
+                # library entry can be replaced safely.
+                media_uri = item.uri
+                if diag.get("selected_media_type") == "artist":
+                    # Passing an artist URI makes MA resolve its entire discography
+                    # before starting. A bounded track list keeps the first stream
+                    # inside Alexa's response deadline and still queues several songs.
+                    media_uri = await _artist_track_uris(client, item, diag)
+                if (media_type == "radio" and
+                        _normal(getattr(item, "name", "")) == "futura radio de autor"):
+                    media_uri = _FUTURA_STREAM_URI
 
-            await client.player_queues.play_media(
-                queue_id=player_id,
-                media=media_uri,
-                option=QueueOption.REPLACE,
-            )
+                play_started = time.monotonic()
+                diag["stage"] = "play_media"
+                diag["stage_started"] = play_started
+                try:
+                    await client.player_queues.play_media(
+                        queue_id=player_id,
+                        media=media_uri,
+                        option=QueueOption.REPLACE,
+                    )
+                except Exception as err:
+                    _log_stage(diag, "play_media", play_started, "error",
+                               player_id=player_id, error=type(err).__name__)
+                    raise
+                _log_stage(diag, "play_media", play_started, player_id=player_id)
+        except Exception as err:
+            if not connected:
+                _log_stage(diag, "connect", connection_started, "error",
+                           error=type(err).__name__)
+            raise
 
     # The MA Alexa player provider pushes the selected queue's fresh stream URL
     # back to this add-on. Wait briefly so the Alexa response can play that URL.
     deadline = time.monotonic() + _PUSH_TIMEOUT
+    push_started = time.monotonic()
+    diag["stage"] = "stream_push_wait"
+    diag["stage_started"] = push_started
     while time.monotonic() < deadline:
         current = shared_store.get_ma(player_id) or {}
         if current.get("version", 0) > old_version and current.get("streamUrl"):
+            _log_stage(diag, "stream_push_wait", push_started,
+                       player_id=player_id, outcome="received")
             return current
         await asyncio.sleep(0.1)
+    _log_stage(diag, "stream_push_wait", push_started, "timeout",
+               player_id=player_id)
     raise SearchPlaybackError("stream_timeout")
 
 
-def play_search_result(query, media_type, player_id):
+def play_search_result(query, media_type, player_id, request_id=None):
     """Search/play a requested MA item and return its pushed stream metadata."""
     server_url = get_env_secret("MA_API_URL")
     token = get_env_secret("MA_API_TOKEN")
@@ -157,25 +334,57 @@ def play_search_result(query, media_type, player_id):
         raise SearchPlaybackError("missing_api")
 
     old_version = (shared_store.get_ma(player_id) or {}).get("version", 0)
+    request_id = request_id or uuid.uuid4().hex[:10]
+    diag = {"request_id": request_id, "stage": "start"}
+    started = time.monotonic()
+    shared_store.begin_voice_request(request_id, player_id, old_version)
+    logger.info("MA voice request_id=%s intent_type=%s query=%r player_id=%s",
+                request_id, media_type, query.strip(), player_id)
+    keep_pending_for_late_push = False
     try:
         return asyncio.run(
             asyncio.wait_for(
                 _search_and_play(
-                    query.strip(), media_type, player_id, old_version, server_url, token
+                    query.strip(), media_type, player_id, old_version,
+                    server_url, token, diag
                 ),
                 timeout=_REQUEST_TIMEOUT,
             )
         )
-    except SearchPlaybackError:
+    except SearchPlaybackError as err:
+        keep_pending_for_late_push = str(err) == "stream_timeout"
+        logger.warning("MA voice request_id=%s failed=%s stage=%s duration_ms=%.1f "
+                       "stage_duration_ms=%.1f",
+                       request_id, str(err), diag.get("stage"),
+                       (time.monotonic() - started) * 1000,
+                       (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise
-    except (CannotConnect, ConnectionFailed, InvalidServerVersion, MusicAssistantError):
-        logger.exception("Music Assistant search/play failed for media type %s", media_type)
+    except (CannotConnect, ConnectionFailed, InvalidServerVersion, MusicAssistantError) as err:
+        logger.error("MA voice request_id=%s failed=api_error stage=%s "
+                     "error_type=%s duration_ms=%.1f stage_duration_ms=%.1f",
+                     request_id, diag.get("stage"), type(err).__name__,
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise SearchPlaybackError("api_error") from None
     except asyncio.TimeoutError:
+        keep_pending_for_late_push = True
+        logger.error("MA voice request_id=%s failed=request_timeout stage=%s "
+                     "duration_ms=%.1f stage_duration_ms=%.1f limit_s=%.1f",
+                     request_id, diag.get("stage"),
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000,
+                     _REQUEST_TIMEOUT)
         raise SearchPlaybackError("timeout") from None
-    except Exception:
-        logger.exception("Unexpected Music Assistant voice-search failure")
+    except Exception as err:
+        logger.error("MA voice request_id=%s failed=api_error stage=%s "
+                     "error_type=%s duration_ms=%.1f stage_duration_ms=%.1f",
+                     request_id, diag.get("stage"), type(err).__name__,
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise SearchPlaybackError("api_error") from None
+    finally:
+        if not keep_pending_for_late_push:
+            shared_store.end_voice_request(request_id, player_id)
 
 
 async def _play_latest_joana(player_id, old_version, server_url, token):

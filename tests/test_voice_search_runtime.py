@@ -87,14 +87,17 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
 
     shared_store.set_ma({"streamUrl": "https://old.example/old.mp3"})
     selected = SimpleNamespace(uri=uri, name={
-        "artist": "IZA", "radio": "Other Radio"}.get(media_type))
+        "track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio"}.get(media_type),
+        artists=[SimpleNamespace(name="Underworld")])
     called = {}
 
     class FakeClient:
         def __init__(self, server_url, session, token=None):
             called["server_url"] = server_url
             called["token"] = token
-            self.music = SimpleNamespace(search=self.search)
+            self.music = SimpleNamespace(
+                search=self.search, get_artist_tracks=self.get_artist_tracks
+            )
             self.player_queues = SimpleNamespace(play_media=self.play_media)
 
         async def __aenter__(self):
@@ -107,6 +110,10 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
             called["search"] = kwargs
             return SimpleNamespace(**{result_attr: [selected]})
 
+        async def get_artist_tracks(self, **kwargs):
+            called["artist_tracks"] = kwargs
+            return [SimpleNamespace(uri="library://track/iza-1")]
+
         async def play_media(self, **kwargs):
             called["play"] = kwargs
             shared_store.set_ma({"streamUrl": "https://streams.example/new.mp3", "player_id": "echo-dot"})
@@ -117,12 +124,16 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
         "MA_API_TOKEN": "test-token",
     }.get(key))
 
-    query = "IZA" if media_type == "artist" else "Sola Sistim Underworld"
+    query = {"track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio"}[media_type]
     stream = voice.play_search_result(query, media_type, "echo-dot")
 
     assert called["search"]["search_query"] == query
     assert called["play"]["queue_id"] == "echo-dot"
-    assert called["play"]["media"] == uri
+    if media_type == "artist":
+        assert called["artist_tracks"]["item_id"] == "iza"
+        assert called["play"]["media"] == ["library://track/iza-1"]
+    else:
+        assert called["play"]["media"] == uri
     assert called["play"]["option"].value == "replace"
     assert stream["streamUrl"] == "https://streams.example/new.mp3"
 
@@ -136,7 +147,8 @@ def test_title_and_artist_are_verified(query):
     wrong = SimpleNamespace(uri='library://track/1', name='Sola Sistim',
                             artists=[SimpleNamespace(name='Other artist')])
     async def search(**kwargs):
-        return SimpleNamespace(tracks=[wrong, good] if kwargs['search_query'] == 'Sola Sistim' else [])
+        return SimpleNamespace(tracks=[wrong, good] if kwargs['search_query'] in (
+            'Sola Sistim', 'Sola Sistim Underworld') else [])
     client = SimpleNamespace(music=SimpleNamespace(search=search))
     assert asyncio.run(find_media(client, query, 'track')) is good
 

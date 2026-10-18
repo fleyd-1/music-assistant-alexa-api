@@ -108,7 +108,8 @@ def _audio_metadata():
     )
 
 
-def play(url, offset, text, response_builder, supports_apl=False, unreachable_prompt=None):
+def play(url, offset, text, response_builder, supports_apl=False,
+         unreachable_prompt=None, validate_url=True, request_id=None):
     def unreachable():
         if unreachable_prompt:
             response_builder.speak(unreachable_prompt).ask(unreachable_prompt)
@@ -135,9 +136,17 @@ def play(url, offset, text, response_builder, supports_apl=False, unreachable_pr
 
         url = replace_ip_in_url(url, hostname)
 
-        skip_validation = get_setting('SKIP_URL_VALIDATION', 'false').lower() in ('true', '1', 'yes')
+        skip_validation = (
+            not validate_url or
+            get_setting('SKIP_URL_VALIDATION', 'false').lower() in ('true', '1', 'yes')
+        )
 
-        if skip_validation:
+        if not validate_url:
+            logging.info(
+                'Skipping synchronous stream preflight for Alexa request_id=%s; '
+                'Alexa will validate the stream with its playback GET', request_id or 'unknown'
+            )
+        elif skip_validation:
             logging.info('Stream URL validation skipped via SKIP_URL_VALIDATION')
         else:
             try:
@@ -171,6 +180,7 @@ def play(url, offset, text, response_builder, supports_apl=False, unreachable_pr
             )
         )
         response_builder.set_should_end_session(True)
+        logging.info('AudioPlayer.Play response prepared request_id=%s', request_id or 'unknown')
 
     if text:
         response_builder.speak(text)

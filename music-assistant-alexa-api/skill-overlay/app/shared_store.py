@@ -1,6 +1,7 @@
 """Locked, independent snapshots for MA streams and Alexa playback metadata."""
 
 import time
+import logging
 from copy import deepcopy
 from threading import RLock
 from urllib.parse import unquote, urlsplit
@@ -10,6 +11,25 @@ _ma = None
 _alexa = None
 _version = 0
 _players = {}
+_pending_voice_requests = {}
+_logger = logging.getLogger(__name__)
+
+
+def begin_voice_request(request_id, player_id, old_version):
+    """Remember a voice request so a late MA stream push can be correlated."""
+    with _lock:
+        _pending_voice_requests[player_id] = {
+            "request_id": request_id,
+            "old_version": old_version,
+            "started": time.monotonic(),
+        }
+
+
+def end_voice_request(request_id, player_id):
+    with _lock:
+        pending = _pending_voice_requests.get(player_id)
+        if pending and pending["request_id"] == request_id:
+            _pending_voice_requests.pop(player_id, None)
 
 
 def get_ma(player_id=None):
@@ -40,6 +60,17 @@ def set_ma(payload):
         player_id = stream_player(_ma)
         if player_id:
             _players[player_id] = deepcopy(_ma)
+            pending = _pending_voice_requests.get(player_id)
+            if pending and _version > pending["old_version"]:
+                elapsed = time.monotonic() - pending["started"]
+                if elapsed <= 60:
+                    _logger.info(
+                        "MA stream push received request_id=%s player_id=%s "
+                        "elapsed_ms=%.1f title=%r",
+                        pending["request_id"], player_id, elapsed * 1000,
+                        _ma.get("title"),
+                    )
+                _pending_voice_requests.pop(player_id, None)
         return _version
 
 

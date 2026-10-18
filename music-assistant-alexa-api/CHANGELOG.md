@@ -1,3 +1,9 @@
+## 1.4.1
+
+- Match artist names with the Portuguese Alexa artist slot and resolve exact local artists before global searches.
+- Queue a bounded set of artist tracks and remove the synchronous stream URL probe from the Alexa response path.
+- Add request-correlated timing logs for Music Assistant search, queue preparation, stream push and Alexa playback events.
+
 ## 1.3.9
 
 - Add one-sentence Portuguese requests to play an artist through the Music Assistant Alexa skill.
