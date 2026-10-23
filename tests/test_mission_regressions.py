@@ -23,7 +23,7 @@ def test_launch_without_stream_keeps_session_open(monkeypatch):
     response = handlers.lambda_handler(payload, None)['response']
     assert response['shouldEndSession'] is False
     assert 'reprompt' in response
-    assert 'Que música' in response['outputSpeech']['ssml']
+    assert 'Diz-me o que queres ouvir' in response['outputSpeech']['ssml']
     assert not response.get('directives')
 
 
@@ -71,7 +71,7 @@ def test_launch_with_expired_stream_prompts_instead_of_ending(monkeypatch, caplo
                     'timestamp': '2026-10-10T17:00:00Z', 'locale': 'pt-BR'}}
     response = handlers.lambda_handler(payload, None)['response']
     assert response['shouldEndSession'] is False
-    assert 'Que música' in response['outputSpeech']['ssml']
+    assert 'Diz-me o que queres ouvir' in response['outputSpeech']['ssml']
     assert 'reprompt' in response
     assert not response.get('directives')
     assert 'secret-token' not in caplog.text
