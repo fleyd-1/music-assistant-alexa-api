@@ -41,6 +41,7 @@ def _metadata(payload):
         'coverImageSource': image, 'headerAttributionImage': '',
         'headerTitle': '', 'headerSubtitle': '',
         'primaryText': payload.get('title') or '', 'secondaryText': secondary,
+        'timestamp': payload.get('timestamp', 0),
     }
 
 

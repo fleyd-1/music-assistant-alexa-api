@@ -177,8 +177,16 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
         logger.info("In LaunchRequestOrPlayAudioHandler")
 
         request = handler_input.request_envelope.request
-        url, _audio = _get_stream_url(request)
+        url, audio = _get_stream_url(request)
         logger.info("Current stream available: %s", bool(url))
+
+        is_fresh_push = False
+        if url and isinstance(audio, dict):
+            stream_age = time.time() - audio.get("timestamp", 0)
+            is_fresh_push = stream_age < 15
+
+        is_play_audio = is_intent_name("PlayAudio")(handler_input)
+        should_play = url and (is_play_audio or is_fresh_push)
 
         prompt = (
             "Que música, rádio ou podcast queres ouvir? Podes dizer: toca a música "
@@ -188,8 +196,9 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
             "What music, album, radio or podcast would you like to hear?"
         )
 
-        if not url:
-            logger.info("No current stream; asking the user what to play")
+        if not should_play:
+            logger.info("Conversational mode: asking user what to play (is_play_audio=%s, is_fresh_push=%s)",
+                        is_play_audio, is_fresh_push)
             handler_input.response_builder.speak(prompt).ask(prompt)
             return handler_input.response_builder.response
 

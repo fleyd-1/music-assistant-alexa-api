@@ -1,3 +1,8 @@
+## 1.4.3
+
+- Ensure voice `LaunchRequest` ("Alexa, abre o Music Assistant") starts conversational dialogue and does not resume stale streams.
+- Fix interaction model slot and sample compliance for Alexa AudioPlayer builtins.
+
 ## 1.4.2
 
 - Support voice commands for albums (`PlayAlbumIntent`), playlists (`PlayPlaylistIntent`), and general podcasts (`PlayPodcastIntent`).
