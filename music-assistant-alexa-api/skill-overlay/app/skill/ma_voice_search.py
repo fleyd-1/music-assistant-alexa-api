@@ -37,6 +37,21 @@ def _normal(value):
         "NFKD", value.casefold()).encode("ascii", "ignore").decode()).split())
 
 
+def _query_variants(query):
+    """Generate search variants for acronyms, spoken spaced letters, and common phonetics."""
+    variants = [query]
+    no_dots = re.sub(r"\.", "", query).strip()
+    collapsed = re.sub(r"(?<=\b[a-z0-9])\s+(?=[a-z0-9]\b)", "", no_dots, flags=re.I)
+    for alt in (no_dots, collapsed):
+        if alt and _normal(alt) not in [_normal(v) for v in variants]:
+            variants.append(alt)
+    # Common PT phonetic collision: 'isa' (diminutive) transcribed for 'iza'
+    if collapsed.casefold() == "isa":
+        if "iza" not in [_normal(v) for v in variants]:
+            variants.append("iza")
+    return variants
+
+
 def _log_stage(diag, stage, started, outcome="ok", **fields):
     """Log a safe duration for one Music Assistant request stage."""
     if diag is not None:
@@ -170,14 +185,16 @@ async def _artist_track_uris(client, artist, diag):
 async def find_media(client, query, media_type, diag=None):
     """Prefer exact library matches; broaden the search only when needed."""
     if media_type == "artist":
+        variants = _query_variants(query)
         for library_only in (True, False):
-            items = await _search(client, query, "artist", library_only, diag)
-            exact = [item for item in items if getattr(item, "uri", None)
-                     and _normal(getattr(item, "name", "")) == _normal(query)]
-            if exact:
-                selected = _best_library_item(exact)
-                _log_selection(diag, selected, "artist")
-                return selected
+            for variant in variants:
+                items = await _search(client, variant, "artist", library_only, diag)
+                exact = [item for item in items if getattr(item, "uri", None)
+                         and any(_normal(getattr(item, "name", "")) == _normal(v) for v in variants)]
+                if exact:
+                    selected = _best_library_item(exact)
+                    _log_selection(diag, selected, "artist")
+                    return selected
         raise SearchPlaybackError("not_found")
 
     if media_type == "radio":
@@ -288,54 +305,60 @@ async def find_media(client, query, media_type, diag=None):
     if media_type != "track":
         raise SearchPlaybackError("not_found")
 
+    variants = _query_variants(query)
+
     # Search both library tracks and artists in one request. If Alexa routes a
     # bare artist name to PlayTrackIntent, this avoids an unnecessary global
     # provider search before the exact local artist fallback.
-    local_results = await _search_results(
-        client, query, ("track", "artist"), True, diag
-    )
-    exact_tracks = [item for item in (getattr(local_results, "tracks", None) or [])
-                    if getattr(item, "uri", None)
-                    and _normal(getattr(item, "name", "")) == _normal(query)]
-    if exact_tracks:
-        selected = _best_library_item(exact_tracks)
-        _log_selection(diag, selected, "track")
-        return selected
-
-    parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
-    if len(parts) == 1:
-        combined_local = _exact_title_artist_match(
-            getattr(local_results, "tracks", None) or [], query
+    for variant in variants:
+        local_results = await _search_results(
+            client, variant, ("track", "artist"), True, diag
         )
-        if combined_local:
-            selected = _best_library_item(combined_local)
+        exact_tracks = [item for item in (getattr(local_results, "tracks", None) or [])
+                        if getattr(item, "uri", None)
+                        and any(_normal(getattr(item, "name", "")) == _normal(v) for v in variants)]
+        if exact_tracks:
+            selected = _best_library_item(exact_tracks)
             _log_selection(diag, selected, "track")
             return selected
-        exact_local_artists = [item for item in (getattr(local_results, "artists", None) or [])
-                               if getattr(item, "uri", None)
-                               and _normal(getattr(item, "name", "")) == _normal(query)]
-        if exact_local_artists:
-            selected = _best_library_item(exact_local_artists)
-            _log_selection(diag, selected, "artist_fallback")
-            return selected
+
+        parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", variant, flags=re.I)
+        if len(parts) == 1:
+            combined_local = _exact_title_artist_match(
+                getattr(local_results, "tracks", None) or [], variant
+            )
+            if combined_local:
+                selected = _best_library_item(combined_local)
+                _log_selection(diag, selected, "track")
+                return selected
+            exact_local_artists = [item for item in (getattr(local_results, "artists", None) or [])
+                                   if getattr(item, "uri", None)
+                                   and any(_normal(getattr(item, "name", "")) == _normal(v) for v in variants)]
+            if exact_local_artists:
+                selected = _best_library_item(exact_local_artists)
+                _log_selection(diag, selected, "artist_fallback")
+                return selected
 
     # MA global search can be fuzzy, so only an exact title can be selected.
-    items = await _search(client, query, "track", False, diag)
-    exact = [item for item in items if getattr(item, "uri", None)
-             and _normal(getattr(item, "name", "")) == _normal(query)]
-    if exact:
-        selected = _best_library_item(exact)
-        _log_selection(diag, selected, "track")
-        return selected
-    if len(parts) == 1:
-        combined_global = _exact_title_artist_match(items, query)
-        if combined_global:
-            selected = _best_library_item(combined_global)
+    for variant in variants:
+        items = await _search(client, variant, "track", False, diag)
+        exact = [item for item in items if getattr(item, "uri", None)
+                 and any(_normal(getattr(item, "name", "")) == _normal(v) for v in variants)]
+        if exact:
+            selected = _best_library_item(exact)
             _log_selection(diag, selected, "track")
             return selected
+        parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", variant, flags=re.I)
+        if len(parts) == 1:
+            combined_global = _exact_title_artist_match(items, variant)
+            if combined_global:
+                selected = _best_library_item(combined_global)
+                _log_selection(diag, selected, "track")
+                return selected
 
     # A title such as "Sonho de Elsa" must survive the parser unchanged when
     # MA has an exact result. For title + artist phrases, verify both fields.
+    parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", query, flags=re.I)
     if len(parts) > 1:
         title, artist = " ".join(parts[:-1]), parts[-1]
         for library_only in (True, False):
@@ -352,13 +375,14 @@ async def find_media(client, query, media_type, diag=None):
 
     # A bare artist may not be in the local library; broaden only after the
     # exact local track/artist check and exact global track check have failed.
-    items = await _search(client, query, "artist", False, diag)
-    exact = [item for item in items if getattr(item, "uri", None)
-             and _normal(getattr(item, "name", "")) == _normal(query)]
-    if exact:
-        selected = _best_library_item(exact)
-        _log_selection(diag, selected, "artist_fallback")
-        return selected
+    for variant in variants:
+        items = await _search(client, variant, "artist", False, diag)
+        exact = [item for item in items if getattr(item, "uri", None)
+                 and any(_normal(getattr(item, "name", "")) == _normal(v) for v in variants)]
+        if exact:
+            selected = _best_library_item(exact)
+            _log_selection(diag, selected, "artist_fallback")
+            return selected
     raise SearchPlaybackError("not_found")
 
 

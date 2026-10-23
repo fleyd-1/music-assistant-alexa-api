@@ -1,3 +1,7 @@
+## 1.4.6
+
+- Add query variant normalization for spaced letters/acronyms (e.g. `i z a` -> `iza`) and phonetic spelling `isa` -> `iza` to resolve artist IZA reliably.
+
 ## 1.4.5
 
 - Automatically strip frequency numbers (e.g. 102.6, 102.seis) and FM/AM suffixes from radio voice queries so stations match their base library names.

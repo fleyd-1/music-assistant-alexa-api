@@ -302,3 +302,21 @@ def test_futura_voice_uses_live_official_stream_for_stale_saved_item(monkeypatch
     stream = voice.play_search_result("rádio futura", "radio", "echo-dot")
     assert called["media"] == "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
     assert stream["streamUrl"] == "https://stream.example/futura.mp3"
+
+
+@pytest.mark.parametrize("query", ["iza", "isa", "i z a", "i.z.a."])
+def test_artist_query_variants_matches_iza(query):
+    import asyncio
+    from skill.ma_voice_search import find_media
+    calls = []
+    artist = SimpleNamespace(uri="library://artist/182", name="IZA")
+
+    async def search(**kwargs):
+        calls.append(kwargs)
+        if kwargs["search_query"].casefold() == "iza":
+            return SimpleNamespace(artists=[artist])
+        return SimpleNamespace(artists=[])
+
+    result = asyncio.run(find_media(
+        SimpleNamespace(music=SimpleNamespace(search=search)), query, "artist"))
+    assert result is artist
