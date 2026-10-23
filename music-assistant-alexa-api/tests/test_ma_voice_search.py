@@ -100,7 +100,7 @@ def test_track_intent_prefers_exact_local_artist_before_global_track_search():
     assert selected is exact_artist
     client.music.search.assert_awaited_once()
     assert client.music.search.await_args.kwargs["media_types"] == [
-        MediaType.TRACK, MediaType.ARTIST
+        MediaType.TRACK, MediaType.ARTIST, MediaType.RADIO
     ]
     assert client.music.search.await_args.kwargs["library_only"] is True
 
