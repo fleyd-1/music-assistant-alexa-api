@@ -40,6 +40,9 @@ def _normal(value):
 def _query_variants(query):
     """Generate search variants for acronyms, spoken spaced letters, and common phonetics."""
     variants = [query]
+    no_radio = re.sub(r"^(?:(?:a\s+|o\s+)?(?:radio|rádio)\s+)+", "", query.strip(), flags=re.I).strip()
+    if no_radio and _normal(no_radio) not in [_normal(v) for v in variants]:
+        variants.append(no_radio)
     no_dots = re.sub(r"\.", "", query).strip()
     collapsed = re.sub(r"(?<=\b[a-z0-9])\s+(?=[a-z0-9]\b)", "", no_dots, flags=re.I)
     for alt in (no_dots, collapsed):
@@ -312,7 +315,7 @@ async def find_media(client, query, media_type, diag=None):
     # provider search before the exact local artist fallback.
     for variant in variants:
         local_results = await _search_results(
-            client, variant, ("track", "artist"), True, diag
+            client, variant, ("track", "artist", "radio"), True, diag
         )
         exact_tracks = [item for item in (getattr(local_results, "tracks", None) or [])
                         if getattr(item, "uri", None)
@@ -321,6 +324,23 @@ async def find_media(client, query, media_type, diag=None):
             selected = _best_library_item(exact_tracks)
             _log_selection(diag, selected, "track")
             return selected
+
+        # Check if query matches a local radio station before falling back to artist or slow global search
+        local_radios = [item for item in (getattr(local_results, "radio", None) or [])
+                        if getattr(item, "uri", None)]
+        if local_radios:
+            for v in variants:
+                norm_v = _normal(v)
+                matched_radio = [
+                    r for r in local_radios
+                    if norm_v == _normal(getattr(r, "name", ""))
+                    or _normal(getattr(r, "name", "")).startswith(norm_v)
+                    or norm_v in _normal(getattr(r, "name", ""))
+                ]
+                if matched_radio:
+                    selected = _best_library_item(matched_radio)
+                    _log_selection(diag, selected, "radio")
+                    return selected
 
         parts = re.split(r"\s+(?:dos|das|do|da|de|by)\s+", variant, flags=re.I)
         if len(parts) == 1:

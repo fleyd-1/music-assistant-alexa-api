@@ -299,9 +299,8 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
                 break
 
         if not query:
-            handler_input.response_builder.speak(
-                "Diz-me o que queres ouvir."
-            ).set_should_end_session(True)
+            prompt = "Diz-me o que queres ouvir."
+            handler_input.response_builder.speak(prompt).ask(prompt)
             return handler_input.response_builder.response
 
         player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
@@ -328,11 +327,14 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
             messages = {
                 "not_found": "Não encontrei isso no Music Assistant.",
                 "missing_api": "A pesquisa por voz ainda não está configurada no Music Assistant.",
-                "stream_timeout": "O Music Assistant não enviou o áudio a tempo. Tenta novamente.",
-                "timeout": "O Music Assistant demorou demasiado a preparar o áudio. Tenta novamente.",
+                "stream_timeout": "O Music Assistant não enviou o áudio a tempo.",
+                "timeout": "O Music Assistant demorou demasiado a preparar o áudio.",
                 "api_error": "Não consegui pesquisar no Music Assistant. Verifica a ligação da API.",
             }
-            handler_input.response_builder.speak(messages.get(str(err), messages["api_error"])).set_should_end_session(True)
+            error_msg = messages.get(str(err), messages["api_error"])
+            prompt = f"{error_msg} Diz-me o que queres ouvir."
+            reprompt = "Diz-me o que queres ouvir."
+            handler_input.response_builder.speak(prompt).ask(reprompt)
             return handler_input.response_builder.response
 
         title = data.get_info().get("primaryText") or query
@@ -384,9 +386,9 @@ class UnhandledIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         logger.info("In UnhandledIntentHandler")
-        _ = handler_input.attributes_manager.request_attributes["_"]
-        handler_input.response_builder.speak(
-            _(data.UNHANDLED_MSG)).set_should_end_session(True)
+        prompt = "Não percebi. Diz-me o que queres ouvir."
+        reprompt = "Diz-me o que queres ouvir."
+        handler_input.response_builder.speak(prompt).ask(reprompt)
         return handler_input.response_builder.response
 
 
@@ -890,10 +892,9 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
         # type: (HandlerInput, Exception) -> Response
         logger.info("In CatchAllExceptionHandler")
         logger.error(exception, exc_info=True)
-        _ = handler_input.attributes_manager.request_attributes["_"]
-        handler_input.response_builder.speak(_(data.UNHANDLED_MSG)).ask(
-            _(data.HELP_MSG).format(
-                util.audio_data(handler_input.request_envelope.request)))
+        prompt = "Ocorreu um erro no Music Assistant. Diz-me o que queres ouvir."
+        reprompt = "Diz-me o que queres ouvir."
+        handler_input.response_builder.speak(prompt).ask(reprompt)
 
         return handler_input.response_builder.response
 

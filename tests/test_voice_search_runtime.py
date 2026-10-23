@@ -320,3 +320,58 @@ def test_artist_query_variants_matches_iza(query):
     result = asyncio.run(find_media(
         SimpleNamespace(music=SimpleNamespace(search=search)), query, "artist"))
     assert result is artist
+
+
+@pytest.mark.parametrize(("query", "expected"), [
+    ("antena 3", "Antena 3 (Portugal)"),
+    ("oxigénio", "OXIGÉNIO 102.6 FM"),
+    ("rádio oxigénio", "OXIGÉNIO 102.6 FM"),
+    ("rádio antena 3", "Antena 3 (Portugal)"),
+])
+def test_track_intent_matches_local_radio(query, expected):
+    import asyncio
+    from skill.ma_voice_search import find_media
+    radio = SimpleNamespace(uri="library://radio/10", name=expected)
+
+    async def search(**kwargs):
+        if kwargs.get("library_only"):
+            return SimpleNamespace(tracks=[], artists=[], radio=[radio])
+        return SimpleNamespace(tracks=[], artists=[], radio=[])
+
+    result = asyncio.run(find_media(
+        SimpleNamespace(music=SimpleNamespace(search=search)), query, "track"))
+    assert result is radio
+
+
+def test_search_playback_error_keeps_session_open_with_reprompt(monkeypatch):
+    import skill.lambda_function as handlers
+    from skill.ma_voice_search import SearchPlaybackError
+
+    def fail_search(*args, **kwargs):
+        raise SearchPlaybackError("not_found")
+
+    monkeypatch.setattr(handlers.ma_voice_search, "play_search_result", fail_search)
+    monkeypatch.setattr(handlers.device_mapping, "get_player_for_device", lambda dev: "echo-dot")
+
+    payload = {
+        "version": "1.0",
+        "session": {"new": False, "sessionId": "test"},
+        "context": {
+            "System": {
+                "application": {"applicationId": "test"},
+                "user": {"userId": "test"},
+                "device": {"deviceId": "echo-dot", "supportedInterfaces": {"AudioPlayer": {}}}
+            }
+        },
+        "request": {
+            "type": "IntentRequest",
+            "requestId": "test-err",
+            "timestamp": "2026-10-24T00:00:00Z",
+            "locale": "pt-BR",
+            "intent": {"name": "PlayTrackIntent", "slots": {"query": {"value": "nonexistent"}}}
+        }
+    }
+    response = handlers.lambda_handler(payload, None)["response"]
+    assert response["shouldEndSession"] is False
+    assert "Diz-me o que queres ouvir" in response["outputSpeech"]["ssml"]
+    assert "reprompt" in response

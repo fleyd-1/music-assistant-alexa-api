@@ -1,3 +1,8 @@
+## 1.4.7
+
+- Keep voice session open on search error, timeout, or unrecognized query, reprompting with "Diz-me o que queres ouvir." instead of closing.
+- Enable direct matching of local radio stations (e.g. Antena 3, Oxigénio) in generic track play intent.
+
 ## 1.4.6
 
 - Add query variant normalization for spaced letters/acronyms (e.g. `i z a` -> `iza`) and phonetic spelling `isa` -> `iza` to resolve artist IZA reliably.
