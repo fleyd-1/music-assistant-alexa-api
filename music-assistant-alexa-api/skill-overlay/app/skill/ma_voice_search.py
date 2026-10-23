@@ -188,6 +188,10 @@ async def find_media(client, query, media_type, diag=None):
         searches = [query]
         if concise and _normal(concise) != _normal(query):
             searches.insert(0, concise)
+        no_freq = re.sub(r"\s+(?:\d+(?:[\.,]\w+)?|\d+)?\s*(?:fm|am)$", "", concise, flags=re.I).strip()
+        no_freq = re.sub(r"\s+\d+(?:[\.,]\w+)?$", "", no_freq, flags=re.I).strip()
+        if no_freq and _normal(no_freq) not in [_normal(s) for s in searches]:
+            searches.append(no_freq)
         for library_only in (True, False):
             for search in searches:
                 items = await _search(client, search, "radio", library_only, diag)

@@ -241,6 +241,30 @@ def test_radio_searches_concise_saved_station_name_first(query, expected):
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize(("query", "expected"), [
+    ("oxigénio 102.6 FM", "oxigénio"),
+    ("oxigênio 102.seis FM", "oxigênio"),
+    ("rádio comercial 97.4 fm", "comercial"),
+])
+def test_radio_strips_frequency_and_fm_suffixes(query, expected):
+    import asyncio
+    from music_assistant_models.enums import MediaType
+    from skill.ma_voice_search import find_media
+    calls = []
+    station = SimpleNamespace(uri='library://radio/10', name=expected)
+
+    async def search(**kwargs):
+        calls.append(kwargs)
+        if kwargs.get('library_only') and kwargs['search_query'].casefold() == expected.casefold():
+            return SimpleNamespace(radio=[station])
+        return SimpleNamespace(radio=[])
+
+    result = asyncio.run(find_media(
+        SimpleNamespace(music=SimpleNamespace(search=search)), query, 'radio'))
+    assert result is station
+    assert any(c['search_query'].casefold() == expected.casefold() for c in calls)
+
+
 def test_futura_voice_uses_live_official_stream_for_stale_saved_item(monkeypatch):
     import shared_store
     import skill

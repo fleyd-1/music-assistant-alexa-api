@@ -1,3 +1,7 @@
+## 1.4.5
+
+- Automatically strip frequency numbers (e.g. 102.6, 102.seis) and FM/AM suffixes from radio voice queries so stations match their base library names.
+
 ## 1.4.4
 
 - Simplify voice prompt on skill open to a concise "Diz-me o que queres ouvir." without lengthy spoken examples.
