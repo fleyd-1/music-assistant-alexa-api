@@ -14,9 +14,9 @@ RUN \
 # Install runtime and build dependencies. Retain ASK CLI for legacy manual
 # administration and fallback status checks; the web wizard uses SMAPI directly.
 RUN apk add --no-cache \
-        nodejs=24.18.1-r0 \
-        npm=11.12.1-r0 \
-        python3=3.14.8-r0 \
+        nodejs \
+        npm \
+        python3 \
         py3-pip \
         py3-virtualenv && \
     apk add --no-cache --virtual .build-dependencies \
