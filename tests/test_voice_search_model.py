@@ -10,7 +10,7 @@ def test_portuguese_voice_search_intents_are_configured():
     intents = json.loads(MODEL.read_text())["interactionModel"]["languageModel"]["intents"]
     by_name = {intent["name"]: intent for intent in intents}
 
-    for intent_name in ("PlayTrackIntent", "PlayRadioIntent"):
+    for intent_name in ("PlayTrackIntent", "PlayRadioIntent", "PlayAlbumIntent", "PlayPlaylistIntent", "PlayPodcastIntent"):
         intent = by_name[intent_name]
         assert intent["slots"] == [{"name": "query", "type": "AMAZON.SearchQuery"}]
         assert intent["samples"]
@@ -23,8 +23,15 @@ def test_portuguese_voice_search_intents_are_configured():
     assert "toca músicas da {query}" in by_name["PlayArtistIntent"]["samples"]
     assert "tocar músicas de {query}" in by_name["PlayArtistIntent"]["samples"]
     assert "toca a rádio {query}" in by_name["PlayRadioIntent"]["samples"]
+    assert "toca o álbum {query}" in by_name["PlayAlbumIntent"]["samples"]
+    assert "toca a playlist {query}" in by_name["PlayPlaylistIntent"]["samples"]
+    assert "toca o podcast {query}" in by_name["PlayPodcastIntent"]["samples"]
     assert by_name["LatestJoanaIntent"]["slots"] == []
     assert "quero ouvir a Joana" in by_name["LatestJoanaIntent"]["samples"]
+
+    for shuffle_loop_intent in ("AMAZON.ShuffleOnIntent", "AMAZON.ShuffleOffIntent", "AMAZON.LoopOnIntent", "AMAZON.LoopOffIntent"):
+        assert shuffle_loop_intent in by_name
+        assert by_name[shuffle_loop_intent]["samples"]
 
     # Keep the no-slot legacy playback intent from stealing track/radio
     # queries before Alexa can populate the SearchQuery slot.

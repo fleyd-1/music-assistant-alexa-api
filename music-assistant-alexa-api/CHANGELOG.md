@@ -1,3 +1,11 @@
+## 1.4.2
+
+- Support voice commands for albums (`PlayAlbumIntent`), playlists (`PlayPlaylistIntent`), and general podcasts (`PlayPodcastIntent`).
+- Separate conversational `LaunchRequest` from direct stream `PlayAudio`, asking what to play instead of auto-resuming.
+- Support voice queue controls for shuffle (`AMAZON.ShuffleOnIntent`/`ShuffleOffIntent`) and repeat (`AMAZON.LoopOnIntent`/`LoopOffIntent`).
+- Translate legacy fallback prompts and error messages to Portuguese.
+- Add request-correlated diagnostic logging for the Joana podcast playback path.
+
 ## 1.4.1
 
 - Match artist names with the Portuguese Alexa artist slot and resolve exact local artists before global searches.

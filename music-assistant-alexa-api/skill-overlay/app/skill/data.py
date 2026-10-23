@@ -13,15 +13,15 @@ if _app_src not in sys.path:
     sys.path.insert(0, _app_src)
 
 WELCOME_MSG = _("")
-HELP_MSG = _("Welcome to {}. You can play, stop, resume listening.  How can I help you ?")
-UNHANDLED_MSG = _("Sorry, I could not understand what you've just said.")
-CANNOT_SKIP_MSG = _("This is radio, you have to wait for previous or next track to play.")
-RESUME_MSG = _("Resuming {}")
-NOT_POSSIBLE_MSG = _("This is radio, you can not do that.  You can ask me to stop or pause to stop listening.")
+HELP_MSG = _("Bem-vindo ao Music Assistant. Podes pedir para tocar músicas, artistas, rádios, álbuns, playlists ou podcasts. O que queres ouvir?")
+UNHANDLED_MSG = _("Não percebi o que disseste. Podes repetir dizendo o que queres ouvir?")
+CANNOT_SKIP_MSG = _("Em transmissões de rádio não é possível saltar de faixa.")
+RESUME_MSG = _("A retomar {}")
+NOT_POSSIBLE_MSG = _("Esse comando não está disponível para esta reprodução.")
 STOP_MSG = _("")
-DEVICE_NOT_SUPPORTED = _("Sorry, this skill is not supported on this device")
-DEVICE_NOT_MAPPED_MSG = _("This device is not paired with a Music Assistant player yet. Please configure it on the status page.")
-MA_COMMAND_FAILED_MSG = _("Sorry, I could not reach Music Assistant to skip the track.")
+DEVICE_NOT_SUPPORTED = _("Este dispositivo não suporta reprodução de áudio.")
+DEVICE_NOT_MAPPED_MSG = _("Esta coluna ainda não está associada a um leitor do Music Assistant. Configura-a na página de dispositivos.")
+MA_COMMAND_FAILED_MSG = _("Não foi possível comunicar com o Music Assistant para executar o comando.")
 
 from contextvars import ContextVar
 

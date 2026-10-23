@@ -90,3 +90,52 @@ def test_export_icon_references_compare_the_bundled_bytes():
     assert package_fingerprint(expected) != package_fingerprint(package('file://icon', b'changed-image'))
     exported.pop('assets/images/pt-BR_smallIconUri.png')
     assert package_fingerprint(expected) != package_fingerprint(exported)
+
+
+def test_shuffle_and_loop_intents_send_commands_to_mapped_player(monkeypatch):
+    commands_sent = []
+    mapping = {'test-device': "Inês's Echo Dot"}
+    monkeypatch.setattr(handlers.device_mapping, 'get_player_for_device', mapping.get)
+    monkeypatch.setattr(handlers.ma_control, 'send_player_command',
+                        lambda player_id, cmd: commands_sent.append((player_id, cmd)) or True)
+
+    for intent_name, expected_cmd in [
+        ('AMAZON.ShuffleOnIntent', 'shuffle_on'),
+        ('AMAZON.ShuffleOffIntent', 'shuffle_off'),
+        ('AMAZON.LoopOnIntent', 'repeat_on'),
+        ('AMAZON.LoopOffIntent', 'repeat_off'),
+    ]:
+        payload = {'version': '1.0', 'session': {'new': True, 'sessionId': 'test'},
+            'context': {'System': {'application': {'applicationId': 'test'},
+                'user': {'userId': 'test'}, 'device': {'deviceId': 'test-device',
+                'supportedInterfaces': {'AudioPlayer': {}}}}},
+            'request': {'type': 'IntentRequest', 'requestId': 'test',
+                'timestamp': '2026-10-10T17:00:00Z', 'locale': 'pt-BR',
+                'intent': {'name': intent_name, 'confirmationStatus': 'NONE'}}}
+        result = handlers.lambda_handler(payload, None)['response']
+        assert 'outputSpeech' in result
+
+    assert commands_sent == [
+        ("Inês's Echo Dot", 'shuffle_on'),
+        ("Inês's Echo Dot", 'shuffle_off'),
+        ("Inês's Echo Dot", 'repeat_on'),
+        ("Inês's Echo Dot", 'repeat_off'),
+    ]
+
+
+def test_play_audio_intent_emits_play_when_stream_available(monkeypatch):
+    stream_url = 'https://music.example/single/server/Dot/stream.mp3'
+    monkeypatch.setattr(handlers, '_get_stream_url', lambda request: (stream_url, {}))
+    monkeypatch.setattr(util, 'get_ma_hostname', lambda **kwargs: 'music.example')
+    monkeypatch.setattr(util, 'replace_ip_in_url', lambda url, hostname: url)
+    monkeypatch.setattr(util, 'get_setting', lambda name, default='': 'true' if name == 'SKIP_URL_VALIDATION' else default)
+
+    payload = {'version': '1.0', 'session': {'new': True, 'sessionId': 'test'},
+        'context': {'System': {'application': {'applicationId': 'test'},
+            'user': {'userId': 'test'}, 'device': {'deviceId': 'test-device',
+            'supportedInterfaces': {'AudioPlayer': {}}}}},
+        'request': {'type': 'IntentRequest', 'requestId': 'test',
+            'timestamp': '2026-10-10T17:00:00Z', 'locale': 'pt-BR',
+            'intent': {'name': 'PlayAudio', 'confirmationStatus': 'NONE'}}}
+    response = handlers.lambda_handler(payload, None)['response']
+    assert response['directives'][0]['playBehavior'] == 'REPLACE_ALL'

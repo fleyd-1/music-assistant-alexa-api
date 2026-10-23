@@ -26,8 +26,19 @@ def track(name, uri, artists=()):
     return SimpleNamespace(name=name, uri=uri, artists=list(artists))
 
 
+def item_with_name(name, uri):
+    return SimpleNamespace(name=name, uri=uri)
+
+
 def result(media_type, items=()):
-    field = {"artist": "artists", "track": "tracks", "radio": "radio"}[media_type]
+    field = {
+        "artist": "artists",
+        "track": "tracks",
+        "radio": "radio",
+        "album": "albums",
+        "playlist": "playlists",
+        "podcast": "podcasts",
+    }[media_type]
     return SimpleNamespace(**{field: list(items)})
 
 
@@ -39,7 +50,14 @@ def client_for(responses):
         for requested_type in kwargs["media_types"]:
             media_type = requested_type.value
             key = (query, media_type, library_only)
-            field = {"artist": "artists", "track": "tracks", "radio": "radio"}[media_type]
+            field = {
+                "artist": "artists",
+                "track": "tracks",
+                "radio": "radio",
+                "album": "albums",
+                "playlist": "playlists",
+                "podcast": "podcasts",
+            }[media_type]
             values[field] = getattr(responses.get(key, result(media_type)), field)
         return SimpleNamespace(**values)
 
@@ -284,3 +302,33 @@ def test_playback_event_correlation_does_not_retain_or_log_stream_url(caplog):
     assert util.get_playback_request_id(url) == "alexa-request-123"
     assert "private.example" not in caplog.text
     assert "secret-stream-token" not in caplog.text
+
+
+def test_album_search_prefers_local_and_strips_prefix():
+    local_album = item_with_name("A Hundred Days Off", "library://album/81")
+    client = client_for({
+        ("A Hundred Days Off", "album", True): result("album", [local_album]),
+    })
+
+    selected = asyncio.run(ma_voice_search.find_media(client, "álbum A Hundred Days Off", "album"))
+    assert selected is local_album
+
+
+def test_playlist_search_finds_exact_or_substring():
+    rock = item_with_name("Rock Anos 80", "library://playlist/rock80")
+    client = client_for({
+        ("Rock Anos 80", "playlist", True): result("playlist", [rock]),
+    })
+
+    selected = asyncio.run(ma_voice_search.find_media(client, "playlist Rock Anos 80", "playlist"))
+    assert selected is rock
+
+
+def test_podcast_search_finds_matching_podcast_with_network_prefix():
+    desagradavel = item_with_name("Renascença - Extremamente Desagradável", "library://podcast/1")
+    client = client_for({
+        ("Extremamente Desagradável", "podcast", True): result("podcast", [desagradavel]),
+    })
+
+    selected = asyncio.run(ma_voice_search.find_media(client, "podcast Extremamente Desagradável", "podcast"))
+    assert selected is desagradavel

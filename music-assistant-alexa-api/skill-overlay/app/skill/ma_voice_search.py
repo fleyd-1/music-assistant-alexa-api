@@ -70,7 +70,14 @@ async def _search_results(client, query, media_types, library_only, diag):
         _log_stage(diag, stage, started, "error", query=query,
                    error=type(err).__name__)
         raise
-    fields = {"artist": "artists", "track": "tracks", "radio": "radio"}
+    fields = {
+        "artist": "artists",
+        "track": "tracks",
+        "radio": "radio",
+        "album": "albums",
+        "playlist": "playlists",
+        "podcast": "podcasts",
+    }
     result_counts = {
         item: len(getattr(results, fields[item], None) or [])
         for item in media_types
@@ -82,7 +89,14 @@ async def _search_results(client, query, media_types, library_only, diag):
 async def _search(client, query, media_type, library_only, diag):
     """Run one timed MA search and return its matching media collection."""
     results = await _search_results(client, query, (media_type,), library_only, diag)
-    key = {"artist": "artists", "track": "tracks", "radio": "radio"}[media_type]
+    key = {
+        "artist": "artists",
+        "track": "tracks",
+        "radio": "radio",
+        "album": "albums",
+        "playlist": "playlists",
+        "podcast": "podcasts",
+    }[media_type]
     return list(getattr(results, key, None) or [])
 
 
@@ -181,6 +195,89 @@ async def find_media(client, query, media_type, diag=None):
                 if items:
                     selected = _best_library_item(items)
                     _log_selection(diag, selected, "radio")
+                    return selected
+        raise SearchPlaybackError("not_found")
+
+    if media_type == "album":
+        concise = re.sub(
+            r"^(?:(?:o\s+)?(?:álbum|album|disco)\s+(?:de\s+|do\s+|da\s+|dos\s+|das\s+)?)+",
+            "", query.strip(), flags=re.I
+        ).strip()
+        searches = [query]
+        if concise and _normal(concise) != _normal(query):
+            searches.insert(0, concise)
+        for library_only in (True, False):
+            for search in searches:
+                items = await _search(client, search, "album", library_only, diag)
+                exact = [item for item in items if getattr(item, "uri", None)
+                         and (_normal(getattr(item, "name", "")) == _normal(search)
+                              or _normal(getattr(item, "name", "")) == _normal(query))]
+                if exact:
+                    selected = _best_library_item(exact)
+                    _log_selection(diag, selected, "album")
+                    return selected
+                if library_only:
+                    sub = [item for item in items if getattr(item, "uri", None)
+                           and (_normal(search) in _normal(getattr(item, "name", ""))
+                                or _normal(getattr(item, "name", "")) in _normal(search))]
+                    if sub:
+                        selected = _best_library_item(sub)
+                        _log_selection(diag, selected, "album")
+                        return selected
+        raise SearchPlaybackError("not_found")
+
+    if media_type == "playlist":
+        concise = re.sub(
+            r"^(?:(?:a\s+)?(?:playlist|lista(?:\s+de\s+reprodução)?)\s+(?:de\s+|do\s+|da\s+|dos\s+|das\s+)?)+",
+            "", query.strip(), flags=re.I
+        ).strip()
+        searches = [query]
+        if concise and _normal(concise) != _normal(query):
+            searches.insert(0, concise)
+        for library_only in (True, False):
+            for search in searches:
+                items = await _search(client, search, "playlist", library_only, diag)
+                exact = [item for item in items if getattr(item, "uri", None)
+                         and (_normal(getattr(item, "name", "")) == _normal(search)
+                              or _normal(getattr(item, "name", "")) == _normal(query))]
+                if exact:
+                    selected = _best_library_item(exact)
+                    _log_selection(diag, selected, "playlist")
+                    return selected
+                if library_only:
+                    sub = [item for item in items if getattr(item, "uri", None)
+                           and (_normal(search) in _normal(getattr(item, "name", ""))
+                                or _normal(getattr(item, "name", "")) in _normal(search))]
+                    if sub:
+                        selected = _best_library_item(sub)
+                        _log_selection(diag, selected, "playlist")
+                        return selected
+        raise SearchPlaybackError("not_found")
+
+    if media_type == "podcast":
+        concise = re.sub(
+            r"^(?:(?:o\s+)?(?:podcast)\s+(?:de\s+|do\s+|da\s+|dos\s+|das\s+)?)+",
+            "", query.strip(), flags=re.I
+        ).strip()
+        searches = [query]
+        if concise and _normal(concise) != _normal(query):
+            searches.insert(0, concise)
+        for library_only in (True, False):
+            for search in searches:
+                items = await _search(client, search, "podcast", library_only, diag)
+                exact = [item for item in items if getattr(item, "uri", None)
+                         and (_normal(getattr(item, "name", "")) == _normal(search)
+                              or _normal(getattr(item, "name", "")) == _normal(query))]
+                if exact:
+                    selected = _best_library_item(exact)
+                    _log_selection(diag, selected, "podcast")
+                    return selected
+                sub = [item for item in items if getattr(item, "uri", None)
+                       and (_normal(search) in _normal(getattr(item, "name", ""))
+                            or _normal(getattr(item, "name", "")) in _normal(search))]
+                if sub:
+                    selected = _best_library_item(sub)
+                    _log_selection(diag, selected, "podcast")
                     return selected
         raise SearchPlaybackError("not_found")
 
@@ -292,11 +389,15 @@ async def _search_and_play(query, media_type, player_id, old_version,
                 diag["stage"] = "play_media"
                 diag["stage_started"] = play_started
                 try:
-                    await client.player_queues.play_media(
-                        queue_id=player_id,
-                        media=media_uri,
-                        option=QueueOption.REPLACE,
-                    )
+                    play_kwargs = {
+                        "queue_id": player_id,
+                        "media": media_uri,
+                        "option": QueueOption.REPLACE,
+                    }
+                    if diag.get("selected_media_type") == "podcast" or media_type == "podcast":
+                        play_kwargs["start_item"] = "latest"
+
+                    await client.player_queues.play_media(**play_kwargs)
                 except Exception as err:
                     _log_stage(diag, "play_media", play_started, "error",
                                player_id=player_id, error=type(err).__name__)
@@ -387,32 +488,56 @@ def play_search_result(query, media_type, player_id, request_id=None):
             shared_store.end_voice_request(request_id, player_id)
 
 
-async def _play_latest_joana(player_id, old_version, server_url, token):
+async def _play_latest_joana(player_id, old_version, server_url, token, diag=None):
     async with aiohttp.ClientSession() as session:
+        connection_started = time.monotonic()
+        if diag is not None:
+            diag["stage"] = "connect"
+            diag["stage_started"] = connection_started
         async with MusicAssistantClient(server_url, session, token=token) as client:
+            _log_stage(diag, "connect", connection_started)
             podcast = await client.music.get_item_by_uri(_JOANA_PODCAST_URI)
             if getattr(podcast, "media_type", None) != MediaType.PODCAST:
                 raise SearchPlaybackError("not_found")
             queue = await client.player_queues.get_active_queue(player_id)
             if queue is None:
                 raise SearchPlaybackError("player_unavailable")
-            await client.player_queues.play_media(
-                queue_id=queue.queue_id,
-                media=_JOANA_PODCAST_URI,
-                option=QueueOption.REPLACE,
-                start_item="latest",
-            )
+
+            play_started = time.monotonic()
+            if diag is not None:
+                diag["stage"] = "play_media"
+                diag["stage_started"] = play_started
+            try:
+                await client.player_queues.play_media(
+                    queue_id=queue.queue_id,
+                    media=_JOANA_PODCAST_URI,
+                    option=QueueOption.REPLACE,
+                    start_item="latest",
+                )
+            except Exception as err:
+                _log_stage(diag, "play_media", play_started, "error",
+                           player_id=player_id, error=type(err).__name__)
+                raise
+            _log_stage(diag, "play_media", play_started, player_id=player_id)
 
     deadline = time.monotonic() + _PUSH_TIMEOUT
+    push_started = time.monotonic()
+    if diag is not None:
+        diag["stage"] = "stream_push_wait"
+        diag["stage_started"] = push_started
     while time.monotonic() < deadline:
         current = shared_store.get_ma(player_id) or {}
         if current.get("version", 0) > old_version and current.get("streamUrl"):
+            _log_stage(diag, "stream_push_wait", push_started,
+                       player_id=player_id, outcome="received")
             return current
         await asyncio.sleep(0.1)
+    _log_stage(diag, "stream_push_wait", push_started, "timeout",
+               player_id=player_id)
     raise SearchPlaybackError("stream_timeout")
 
 
-def play_latest_joana(player_id):
+def play_latest_joana(player_id, request_id=None):
     """Play the newest library episode on the requesting Echo's MA queue."""
     server_url = get_env_secret("MA_API_URL")
     token = get_env_secret("MA_API_TOKEN")
@@ -420,18 +545,49 @@ def play_latest_joana(player_id):
         raise SearchPlaybackError("missing_api")
 
     old_version = (shared_store.get_ma(player_id) or {}).get("version", 0)
+    request_id = request_id or uuid.uuid4().hex[:10]
+    diag = {"request_id": request_id, "stage": "start"}
+    started = time.monotonic()
+    shared_store.begin_voice_request(request_id, player_id, old_version)
+    logger.info("MA voice request_id=%s intent_type=joana player_id=%s",
+                request_id, player_id)
+    keep_pending_for_late_push = False
     try:
         return asyncio.run(asyncio.wait_for(
-            _play_latest_joana(player_id, old_version, server_url, token),
+            _play_latest_joana(player_id, old_version, server_url, token, diag),
             timeout=_REQUEST_TIMEOUT,
         ))
-    except SearchPlaybackError:
+    except SearchPlaybackError as err:
+        keep_pending_for_late_push = str(err) == "stream_timeout"
+        logger.warning("MA voice request_id=%s failed=%s stage=%s duration_ms=%.1f "
+                       "stage_duration_ms=%.1f",
+                       request_id, str(err), diag.get("stage"),
+                       (time.monotonic() - started) * 1000,
+                       (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise
-    except (CannotConnect, ConnectionFailed, InvalidServerVersion, MusicAssistantError):
-        logger.exception("Music Assistant podcast playback failed")
+    except (CannotConnect, ConnectionFailed, InvalidServerVersion, MusicAssistantError) as err:
+        logger.error("MA voice request_id=%s failed=api_error stage=%s "
+                     "error_type=%s duration_ms=%.1f stage_duration_ms=%.1f",
+                     request_id, diag.get("stage"), type(err).__name__,
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise SearchPlaybackError("api_error") from None
     except asyncio.TimeoutError:
+        keep_pending_for_late_push = True
+        logger.error("MA voice request_id=%s failed=request_timeout stage=%s "
+                     "duration_ms=%.1f stage_duration_ms=%.1f limit_s=%.1f",
+                     request_id, diag.get("stage"),
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000,
+                     _REQUEST_TIMEOUT)
         raise SearchPlaybackError("timeout") from None
-    except Exception:
-        logger.exception("Unexpected Music Assistant podcast playback failure")
+    except Exception as err:
+        logger.error("MA voice request_id=%s failed=api_error stage=%s "
+                     "error_type=%s duration_ms=%.1f stage_duration_ms=%.1f",
+                     request_id, diag.get("stage"), type(err).__name__,
+                     (time.monotonic() - started) * 1000,
+                     (time.monotonic() - diag.get("stage_started", started)) * 1000)
         raise SearchPlaybackError("api_error") from None
+    finally:
+        if not keep_pending_for_late_push:
+            shared_store.end_voice_request(request_id, player_id)

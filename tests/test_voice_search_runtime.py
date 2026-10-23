@@ -74,6 +74,9 @@ def test_latest_joana_uses_requesting_player_queue(monkeypatch, player_id):
     ("track", "tracks", "spotify://track/123"),
     ("artist", "artists", "library://artist/iza"),
     ("radio", "radio", "radiobrowser://station/456"),
+    ("album", "albums", "library://album/81"),
+    ("playlist", "playlists", "library://playlist/rock"),
+    ("podcast", "podcasts", "library://podcast/desagradavel"),
 ])
 def test_voice_search_plays_result_and_waits_for_pushed_stream(
     monkeypatch, media_type, result_attr, uri
@@ -87,8 +90,9 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
 
     shared_store.set_ma({"streamUrl": "https://old.example/old.mp3"})
     selected = SimpleNamespace(uri=uri, name={
-        "track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio"}.get(media_type),
-        artists=[SimpleNamespace(name="Underworld")])
+        "track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio",
+        "album": "A Hundred Days Off", "playlist": "Rock", "podcast": "Extremamente Desagradável"
+    }.get(media_type), artists=[SimpleNamespace(name="Underworld")])
     called = {}
 
     class FakeClient:
@@ -124,7 +128,10 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
         "MA_API_TOKEN": "test-token",
     }.get(key))
 
-    query = {"track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio"}[media_type]
+    query = {
+        "track": "Sola Sistim", "artist": "IZA", "radio": "Other Radio",
+        "album": "A Hundred Days Off", "playlist": "Rock", "podcast": "Extremamente Desagradável"
+    }[media_type]
     stream = voice.play_search_result(query, media_type, "echo-dot")
 
     assert called["search"]["search_query"] == query
@@ -134,6 +141,8 @@ def test_voice_search_plays_result_and_waits_for_pushed_stream(
         assert called["play"]["media"] == ["library://track/iza-1"]
     else:
         assert called["play"]["media"] == uri
+    if media_type == "podcast":
+        assert called["play"]["start_item"] == "latest"
     assert called["play"]["option"].value == "replace"
     assert stream["streamUrl"] == "https://streams.example/new.mp3"
 

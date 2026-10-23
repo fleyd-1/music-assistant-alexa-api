@@ -156,7 +156,7 @@ def play(url, offset, text, response_builder, supports_apl=False,
             response_builder.speak(unreachable_prompt).ask(unreachable_prompt)
         else:
             response_builder.speak(
-                "Sorry, I can't reach the audio file. Please check that your stream URL is internet accessible via HTTPS at the MA_HOSTNAME variable you provided."
+                "Não consegui aceder ao ficheiro de áudio. Verifica a ligação ao Music Assistant e o endereço HTTPS configurado."
             ).set_should_end_session(True)
         return response_builder.response
 
@@ -167,12 +167,14 @@ def play(url, offset, text, response_builder, supports_apl=False,
             hostname = get_ma_hostname(raise_on_http_scheme=True)
         except ValueError:
             response_builder.speak(
-                "The domain uses an unsupported scheme (http). Please check your environment variable MA_HOSTNAME.").set_should_end_session(True)
+                "O domínio utiliza um protocolo não suportado (HTTP). Configura um endereço HTTPS válido."
+            ).set_should_end_session(True)
             return response_builder.response
 
         if not hostname:
             response_builder.speak(
-                "You did not specify a valid hostname. Please check your environment variable MA_HOSTNAME.").set_should_end_session(True)
+                "Não foi especificado um nome de anfitrião válido. Verifica a configuração do endereço no add-on."
+            ).set_should_end_session(True)
             return response_builder.response
 
         url = replace_ip_in_url(url, hostname)

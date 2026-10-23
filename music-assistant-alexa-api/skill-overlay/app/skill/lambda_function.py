@@ -165,27 +165,45 @@ class SkillEventHandler(AbstractRequestHandler):
         return handler_input.response_builder.response
 
 
-class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
-    """Launch radio for skill launch or PlayAudio intent."""
+class LaunchRequestHandler(AbstractRequestHandler):
+    """Conversational launch: always ask the user what they want to hear."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
-        return (is_request_type("LaunchRequest")(handler_input) or
-                is_intent_name("PlayAudio")(handler_input))
+        return is_request_type("LaunchRequest")(handler_input)
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        logger.info("In LaunchRequestOrPlayAudioHandler")
+        logger.info("In LaunchRequestHandler (conversational dialogue mode)")
+        request = handler_input.request_envelope.request
+        prompt = (
+            "Que música, rádio ou podcast queres ouvir? Podes dizer: toca a música "
+            "Sola Sistim dos Underworld, toca o álbum A Hundred Days Off, toca a rádio Comercial, "
+            "ou toca a Joana."
+            if getattr(request, "locale", "").startswith("pt") else
+            "What music, album, radio or podcast would you like to hear?"
+        )
+        handler_input.response_builder.speak(prompt).ask(prompt)
+        return handler_input.response_builder.response
 
-        _ = handler_input.attributes_manager.request_attributes["_"]
+
+class PlayAudioIntentHandler(AbstractRequestHandler):
+    """Direct stream playback triggered by Music Assistant remote push."""
+    def can_handle(self, handler_input):
+        # type: (HandlerInput) -> bool
+        return is_intent_name("PlayAudio")(handler_input)
+
+    def handle(self, handler_input):
+        # type: (HandlerInput) -> Response
+        logger.info("In PlayAudioIntentHandler")
+
         request = handler_input.request_envelope.request
         url, _audio = _get_stream_url(request)
         logger.info("Current stream available: %s", bool(url))
 
         prompt = (
-            "Que música ou rádio queres ouvir? Podes dizer: toca a música "
-            "Sola Sistim dos Underworld, ou toca a rádio Rádio Comercial."
+            "Que música ou rádio queres ouvir?"
             if getattr(request, "locale", "").startswith("pt") else
-            "What music or radio would you like to hear?"
+            "What would you like to hear?"
         )
 
         if not url:
@@ -261,12 +279,15 @@ class LatestJoanaIntentHandler(AbstractRequestHandler):
 
 
 class SpecificMediaIntentHandler(AbstractRequestHandler):
-    """Search for a requested track or radio station in Music Assistant."""
+    """Search for a requested track, artist, radio, album, playlist or podcast."""
 
     INTENT_TYPES = {
         "PlayTrackIntent": "track",
         "PlayArtistIntent": "artist",
         "PlayRadioIntent": "radio",
+        "PlayAlbumIntent": "album",
+        "PlayPlaylistIntent": "playlist",
+        "PlayPodcastIntent": "podcast",
     }
 
     def can_handle(self, handler_input):
@@ -290,7 +311,7 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
         if not query:
             handler_input.response_builder.speak(
-                "Diz o nome do artista, da música ou da rádio que queres ouvir."
+                "Diz o que queres ouvir: uma música, artista, rádio, álbum, playlist ou podcast."
             ).set_should_end_session(True)
             return handler_input.response_builder.response
 
@@ -502,7 +523,7 @@ class ResumeIntentHandler(AbstractRequestHandler):
         if not url:
             logger.warning("No stream url available for Resume request")
             handler_input.response_builder.speak(
-                "Sorry, I couldn't reach the stream right now.").set_should_end_session(True)
+                "Não consegui aceder ao fluxo de áudio neste momento.").set_should_end_session(True)
             return handler_input.response_builder.response
 
         offset = util.get_resume_offset(_device_id_from(handler_input), url)
@@ -561,10 +582,29 @@ class LoopOrShuffleIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         logger.info("In LoopOrShuffleIntentHandler")
+        request = handler_input.request_envelope.request
+        intent_name = getattr(request.intent, "name", "")
+        device_id = _device_id_from(handler_input)
+        player_id = device_mapping.get_player_for_device(device_id)
+        if not player_id:
+            logger.warning("No MA player mapped for device_id=%s (shuffle/loop)", device_id)
+            handler_input.response_builder.speak(
+                "Esta coluna ainda não está associada a um leitor do Music Assistant."
+            ).set_should_end_session(True)
+            return handler_input.response_builder.response
 
-        _ = handler_input.attributes_manager.request_attributes["_"]
-        speech = _(data.NOT_POSSIBLE_MSG)
-        return handler_input.response_builder.speak(speech).response
+        cmd_map = {
+            "AMAZON.ShuffleOnIntent": ("shuffle_on", "Modo aleatório ativado."),
+            "AMAZON.ShuffleOffIntent": ("shuffle_off", "Modo aleatório desativado."),
+            "AMAZON.LoopOnIntent": ("repeat_on", "Repetição ativada."),
+            "AMAZON.LoopOffIntent": ("repeat_off", "Repetição desativada."),
+        }
+        cmd, speech = cmd_map.get(intent_name, (None, None))
+        if cmd and not ma_control.send_player_command(player_id, cmd):
+            speech = "Não foi possível alterar a reprodução no Music Assistant."
+
+        handler_input.response_builder.speak(speech or "Comando executado.").set_should_end_session(True)
+        return handler_input.response_builder.response
 
 # ###################################################################
 
@@ -783,7 +823,7 @@ class PlayCommandHandler(AbstractRequestHandler):
         if not url:
             logger.warning("No stream url available for PlayCommand; notifying user")
             handler_input.response_builder.speak(
-                "Sorry, I couldn't reach the stream right now.").set_should_end_session(True)
+                "Não consegui aceder ao fluxo de áudio neste momento.").set_should_end_session(True)
             return handler_input.response_builder.response
 
         return util.play(
@@ -962,7 +1002,8 @@ class ResponseLogger(AbstractResponseInterceptor):
 # Request Handlers
 sb.add_request_handler(CheckAudioInterfaceHandler())
 sb.add_request_handler(SkillEventHandler())
-sb.add_request_handler(LaunchRequestOrPlayAudioHandler())
+sb.add_request_handler(LaunchRequestHandler())
+sb.add_request_handler(PlayAudioIntentHandler())
 sb.add_request_handler(LatestJoanaIntentHandler())
 sb.add_request_handler(SpecificMediaIntentHandler())
 sb.add_request_handler(PlayCommandHandler())
