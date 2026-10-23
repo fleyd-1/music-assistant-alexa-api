@@ -165,45 +165,27 @@ class SkillEventHandler(AbstractRequestHandler):
         return handler_input.response_builder.response
 
 
-class LaunchRequestHandler(AbstractRequestHandler):
-    """Conversational launch: always ask the user what they want to hear."""
+class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
+    """Launch radio for skill launch or PlayAudio intent."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
-        return is_request_type("LaunchRequest")(handler_input)
+        return (is_request_type("LaunchRequest")(handler_input) or
+                is_intent_name("PlayAudio")(handler_input))
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        logger.info("In LaunchRequestHandler (conversational dialogue mode)")
-        request = handler_input.request_envelope.request
-        prompt = (
-            "Que música, rádio ou podcast queres ouvir? Podes dizer: toca a música "
-            "Sola Sistim dos Underworld, toca o álbum A Hundred Days Off, toca a rádio Comercial, "
-            "ou toca a Joana."
-            if getattr(request, "locale", "").startswith("pt") else
-            "What music, album, radio or podcast would you like to hear?"
-        )
-        handler_input.response_builder.speak(prompt).ask(prompt)
-        return handler_input.response_builder.response
-
-
-class PlayAudioIntentHandler(AbstractRequestHandler):
-    """Direct stream playback triggered by Music Assistant remote push."""
-    def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return is_intent_name("PlayAudio")(handler_input)
-
-    def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
-        logger.info("In PlayAudioIntentHandler")
+        logger.info("In LaunchRequestOrPlayAudioHandler")
 
         request = handler_input.request_envelope.request
         url, _audio = _get_stream_url(request)
         logger.info("Current stream available: %s", bool(url))
 
         prompt = (
-            "Que música ou rádio queres ouvir?"
+            "Que música, rádio ou podcast queres ouvir? Podes dizer: toca a música "
+            "Sola Sistim dos Underworld, toca o álbum A Hundred Days Off, toca a rádio Comercial, "
+            "ou toca a Joana."
             if getattr(request, "locale", "").startswith("pt") else
-            "What would you like to hear?"
+            "What music, album, radio or podcast would you like to hear?"
         )
 
         if not url:
@@ -1002,8 +984,7 @@ class ResponseLogger(AbstractResponseInterceptor):
 # Request Handlers
 sb.add_request_handler(CheckAudioInterfaceHandler())
 sb.add_request_handler(SkillEventHandler())
-sb.add_request_handler(LaunchRequestHandler())
-sb.add_request_handler(PlayAudioIntentHandler())
+sb.add_request_handler(LaunchRequestOrPlayAudioHandler())
 sb.add_request_handler(LatestJoanaIntentHandler())
 sb.add_request_handler(SpecificMediaIntentHandler())
 sb.add_request_handler(PlayCommandHandler())
