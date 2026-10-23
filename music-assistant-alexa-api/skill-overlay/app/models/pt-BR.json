@@ -35,7 +35,7 @@
           "slots": [
             {
               "name": "query",
-              "type": "AMAZON.Artist"
+              "type": "AMAZON.SearchQuery"
             }
           ],
           "samples": [
@@ -147,42 +147,19 @@
         },
         {
           "name": "AMAZON.ShuffleOnIntent",
-          "samples": [
-            "ativa o modo aleatório",
-            "ligar modo aleatório",
-            "modo aleatório",
-            "reproduzir em modo aleatório",
-            "baralhar as músicas",
-            "baralhar"
-          ]
+          "samples": []
         },
         {
           "name": "AMAZON.ShuffleOffIntent",
-          "samples": [
-            "desativa o modo aleatório",
-            "desligar modo aleatório",
-            "desativar modo aleatório",
-            "parar modo aleatório"
-          ]
+          "samples": []
         },
         {
           "name": "AMAZON.LoopOnIntent",
-          "samples": [
-            "ativa a repetição",
-            "ligar repetição",
-            "repetir",
-            "repetir tudo",
-            "modo de repetição"
-          ]
+          "samples": []
         },
         {
           "name": "AMAZON.LoopOffIntent",
-          "samples": [
-            "desativa a repetição",
-            "desligar repetição",
-            "não repetir",
-            "parar repetição"
-          ]
+          "samples": []
         },
         {
           "name": "AMAZON.ResumeIntent",

@@ -209,12 +209,12 @@ def test_fuzzy_track_without_exact_artist_match_is_rejected():
         asyncio.run(ma_voice_search.find_media(client, "Underworld", "track"))
 
 
-def test_pt_br_artist_intent_uses_amazon_artist_slot():
+def test_pt_br_artist_intent_uses_search_query_slot():
     model = json.loads((PROJECT / "skill-overlay" / "app" / "models" / "pt-BR.json").read_text())
     intents = model["interactionModel"]["languageModel"]["intents"]
     artist_intent = next(intent for intent in intents if intent["name"] == "PlayArtistIntent")
 
-    assert artist_intent["slots"] == [{"name": "query", "type": "AMAZON.Artist"}]
+    assert artist_intent["slots"] == [{"name": "query", "type": "AMAZON.SearchQuery"}]
 
 
 def test_late_stream_push_is_correlated_without_logging_its_url(caplog):
