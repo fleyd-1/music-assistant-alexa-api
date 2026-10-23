@@ -1,3 +1,7 @@
+## 1.4.4
+
+- Simplify voice prompt on skill open to a concise "Diz-me o que queres ouvir." without lengthy spoken examples.
+
 ## 1.4.3
 
 - Ensure voice `LaunchRequest` ("Alexa, abre o Music Assistant") starts conversational dialogue and does not resume stale streams.

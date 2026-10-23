@@ -189,11 +189,9 @@ class LaunchRequestOrPlayAudioHandler(AbstractRequestHandler):
         should_play = url and (is_play_audio or is_fresh_push)
 
         prompt = (
-            "Que música, rádio ou podcast queres ouvir? Podes dizer: toca a música "
-            "Sola Sistim dos Underworld, toca o álbum A Hundred Days Off, toca a rádio Comercial, "
-            "ou toca a Joana."
+            "Diz-me o que queres ouvir."
             if getattr(request, "locale", "").startswith("pt") else
-            "What music, album, radio or podcast would you like to hear?"
+            "What would you like to hear?"
         )
 
         if not should_play:
@@ -302,7 +300,7 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
 
         if not query:
             handler_input.response_builder.speak(
-                "Diz o que queres ouvir: uma música, artista, rádio, álbum, playlist ou podcast."
+                "Diz-me o que queres ouvir."
             ).set_should_end_session(True)
             return handler_input.response_builder.response
 
