@@ -329,6 +329,7 @@ def test_artist_query_variants_matches_iza(query):
     ("rádio antena 3", "Antena 3 (Portugal)"),
 ])
 def test_track_intent_matches_local_radio(query, expected):
+    """Ensure generic track play intent directly resolves local radio stations."""
     import asyncio
     from skill.ma_voice_search import find_media
     radio = SimpleNamespace(uri="library://radio/10", name=expected)
