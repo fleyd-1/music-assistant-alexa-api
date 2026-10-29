@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import gettext
+import json
 import logging
 import os
+import re
 import time
 
 from ask_sdk.standard import StandardSkillBuilder
@@ -303,6 +305,13 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
             handler_input.response_builder.speak(prompt).ask(prompt)
             return handler_input.response_builder.response
 
+        # "toca {query}" can swallow "toca os meus favoritos" and similar.
+        shortcut = ma_voice_search.shortcut_for_query(query)
+        if shortcut:
+            logger.info("Alexa request_id=%s query=%r routed to shortcut=%s",
+                        request_id, query, shortcut)
+            return _play_shortcut_response(handler_input, shortcut)
+
         player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
         if not player_id:
             logger.warning("Music Assistant intent=%s query=%r has no player mapping",
@@ -350,6 +359,167 @@ class SpecificMediaIntentHandler(AbstractRequestHandler):
         logger.info("Alexa request_id=%s stage=response_ready total_ms=%.1f",
                     request_id, (time.monotonic() - request_started) * 1000)
         return response
+
+
+_SHORTCUT_PROMPTS = {
+    "favorites": ("os teus favoritos", "Não encontrei músicas favoritas no Music Assistant."),
+    "last_radio": ("a última rádio", "Não encontrei nenhuma rádio ouvida recentemente."),
+    "recent": ("o que estavas a ouvir", "Não encontrei nada ouvido recentemente."),
+}
+
+
+def _play_shortcut_response(handler_input, kind):
+    """Start a favourites / last radio / recent shortcut on this Echo."""
+    request = handler_input.request_envelope.request
+    request_id = getattr(request, "request_id", None) or "unknown"
+    player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
+    if not player_id:
+        handler_input.response_builder.speak(
+            "Esta coluna ainda não está associada a um leitor do Music Assistant."
+        ).set_should_end_session(True)
+        return handler_input.response_builder.response
+
+    fallback_title, not_found = _SHORTCUT_PROMPTS[kind]
+    logger.info("Alexa request_id=%s shortcut=%s player_id=%s", request_id, kind, player_id)
+    try:
+        ma_voice_search.play_shortcut(kind, player_id, request_id=request_id)
+        data.begin_request(player_id)
+        url, _audio = _get_stream_url(request)
+        if not url:
+            raise ma_voice_search.SearchPlaybackError("stream_timeout")
+    except ma_voice_search.SearchPlaybackError as err:
+        messages = {
+            "not_found": not_found,
+            "missing_api": "A ligação ao Music Assistant não está configurada.",
+            "stream_timeout": "O Music Assistant não enviou o áudio a tempo.",
+            "timeout": "O Music Assistant demorou demasiado a preparar o áudio.",
+            "api_error": "Não consegui falar com o Music Assistant.",
+        }
+        reprompt = "Diz-me o que queres ouvir."
+        handler_input.response_builder.speak(
+            f"{messages.get(str(err), messages['api_error'])} {reprompt}").ask(reprompt)
+        return handler_input.response_builder.response
+
+    title = data.get_info().get("primaryText") or fallback_title
+    return util.play(
+        url=url,
+        offset=0,
+        text=f"A tocar {title}.",
+        response_builder=handler_input.response_builder,
+        supports_apl=_supports_apl(handler_input),
+        validate_url=False,
+        request_id=request_id,
+    )
+
+
+class ShortcutIntentHandler(AbstractRequestHandler):
+    """Favourites, last radio and 'what I was listening to'."""
+
+    INTENT_KINDS = {
+        "PlayFavoritesIntent": "favorites",
+        "PlayLastRadioIntent": "last_radio",
+        "PlayRecentIntent": "recent",
+    }
+
+    def can_handle(self, handler_input):
+        intent = getattr(handler_input.request_envelope.request, "intent", None)
+        return bool(intent and intent.name in self.INTENT_KINDS)
+
+    def handle(self, handler_input):
+        intent_name = handler_input.request_envelope.request.intent.name
+        return _play_shortcut_response(handler_input, self.INTENT_KINDS[intent_name])
+
+
+class NowPlayingIntentHandler(AbstractRequestHandler):
+    """Say the title and artist of what is playing on this Echo."""
+
+    def can_handle(self, handler_input):
+        return is_intent_name("NowPlayingIntent")(handler_input)
+
+    def handle(self, handler_input):
+        player_id = device_mapping.get_player_for_device(_device_id_from(handler_input))
+        info = ma_control.get_now_playing(player_id) if player_id else None
+        if not info or not info.get("title"):
+            # Fall back to the metadata MA pushed with the current stream.
+            pushed = data.get_info()
+            info = {"title": pushed.get("primaryText") or "",
+                    "artist": (pushed.get("secondaryText") or "").split(" - ")[0]}
+        if info.get("title") and info.get("artist"):
+            speech = f"Está a tocar {info['title']}, de {info['artist']}."
+        elif info.get("title"):
+            speech = f"Está a tocar {info['title']}."
+        else:
+            speech = "Não consegui saber o que está a tocar."
+        handler_input.response_builder.speak(speech).set_should_end_session(True)
+        return handler_input.response_builder.response
+
+
+def _duration_seconds(value):
+    """Parse an ISO-8601 AMAZON.DURATION value such as PT30M or PT1H15M."""
+    match = re.fullmatch(
+        r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", value or "")
+    if not match or not any(match.groups()):
+        return None
+    days, hours, minutes, seconds = (int(part or 0) for part in match.groups())
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
+def _spoken_duration(seconds):
+    hours, minutes = divmod(round(seconds / 60), 60)
+    parts = []
+    if hours:
+        parts.append("1 hora" if hours == 1 else f"{hours} horas")
+    if minutes:
+        parts.append("1 minuto" if minutes == 1 else f"{minutes} minutos")
+    return " e ".join(parts) or "menos de um minuto"
+
+
+class SleepTimerIntentHandler(AbstractRequestHandler):
+    """Pause the music on this Echo after a spoken duration."""
+
+    MAX_SECONDS = 4 * 3600
+
+    def can_handle(self, handler_input):
+        return is_intent_name("SleepTimerIntent")(handler_input)
+
+    def handle(self, handler_input):
+        slots = getattr(handler_input.request_envelope.request.intent, "slots", None) or {}
+        slot = slots.get("duration")
+        seconds = _duration_seconds(getattr(slot, "value", None))
+        if not seconds or seconds < 60 or seconds > self.MAX_SECONDS:
+            prompt = "Daqui a quanto tempo queres que a música pare? Por exemplo, trinta minutos."
+            handler_input.response_builder.speak(prompt).ask(prompt)
+            return handler_input.response_builder.response
+
+        device_id = _device_id_from(handler_input)
+        player_id = device_mapping.get_player_for_device(device_id)
+        if not player_id:
+            handler_input.response_builder.speak(
+                "Esta coluna ainda não está associada a um leitor do Music Assistant."
+            ).set_should_end_session(True)
+            return handler_input.response_builder.response
+
+        ma_control.set_sleep_timer(device_id, player_id, seconds)
+        logger.info("Sleep timer set player_id=%s seconds=%d", player_id, seconds)
+        handler_input.response_builder.speak(
+            f"Combinado. Paro a música daqui a {_spoken_duration(seconds)}."
+        ).set_should_end_session(True)
+        return handler_input.response_builder.response
+
+
+class CancelSleepTimerIntentHandler(AbstractRequestHandler):
+    """Cancel the pending sleep timer on this Echo."""
+
+    def can_handle(self, handler_input):
+        return is_intent_name("CancelSleepTimerIntent")(handler_input)
+
+    def handle(self, handler_input):
+        if ma_control.cancel_sleep_timer(_device_id_from(handler_input)):
+            speech = "Cancelei. A música continua a tocar."
+        else:
+            speech = "Não havia nenhum temporizador ligado."
+        handler_input.response_builder.speak(speech).set_should_end_session(True)
+        return handler_input.response_builder.response
 
 
 class HelpIntentHandler(AbstractRequestHandler):
@@ -880,6 +1050,19 @@ class PauseCommandHandler(AbstractRequestHandler):
 # ###################################################################
 
 # ################## EXCEPTION HANDLERS #############################
+class SkillIdMismatchError(Exception):
+    """A signed Alexa request that was sent to another developer's skill."""
+
+
+class SkillIdMismatchHandler(AbstractExceptionHandler):
+    """Answer foreign skills with an empty response and do nothing else."""
+    def can_handle(self, handler_input, exception):
+        return isinstance(exception, SkillIdMismatchError)
+
+    def handle(self, handler_input, exception):
+        return handler_input.response_builder.set_should_end_session(True).response
+
+
 class CatchAllExceptionHandler(AbstractExceptionHandler):
     """Catch all exception handler, log exception and
     respond with custom message.
@@ -901,6 +1084,46 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 # ###################################################################
 
 # ############# REQUEST / RESPONSE INTERCEPTORS #####################
+
+_skill_id_cache = {"key": None, "skill_id": None}
+
+
+def _expected_skill_id():
+    """Skill ID saved by the setup wizard, re-read whenever the file changes."""
+    path = os.environ.get("SKILL_DEPLOYMENT_PATH", "/data/skill-deployment.json")
+    try:
+        key = (path, os.stat(path).st_mtime_ns)
+    except OSError:
+        return None
+    if key != _skill_id_cache["key"]:
+        try:
+            with open(path, encoding="utf-8") as handle:
+                skill_id = json.load(handle).get("skill_id")
+        except (OSError, ValueError, AttributeError):
+            skill_id = None
+        _skill_id_cache.update(key=key, skill_id=skill_id or None)
+    return _skill_id_cache["skill_id"]
+
+
+class SkillIdVerificationInterceptor(AbstractRequestInterceptor):
+    """Reject requests that Amazon signed for a different skill.
+
+    Signature checks only prove a request came from Amazon. Without this,
+    anyone could point their own skill at this endpoint and control playback.
+    Before the wizard has deployed a skill there is nothing to compare, so
+    requests are allowed.
+    """
+    def process(self, handler_input):
+        expected = _expected_skill_id()
+        if not expected:
+            return
+        system = getattr(getattr(handler_input.request_envelope, "context", None), "system", None)
+        application = getattr(system, "application", None)
+        actual = getattr(application, "application_id", None)
+        if actual != expected:
+            logger.warning("Rejected Alexa request for another skill id")
+            raise SkillIdMismatchError()
+
 
 class APLSupportRequestInterceptor(AbstractRequestInterceptor):
     """Capture metadata and device capabilities independently for each request."""
@@ -995,6 +1218,10 @@ sb.add_request_handler(SkillEventHandler())
 sb.add_request_handler(LaunchRequestOrPlayAudioHandler())
 sb.add_request_handler(LatestJoanaIntentHandler())
 sb.add_request_handler(SpecificMediaIntentHandler())
+sb.add_request_handler(ShortcutIntentHandler())
+sb.add_request_handler(NowPlayingIntentHandler())
+sb.add_request_handler(SleepTimerIntentHandler())
+sb.add_request_handler(CancelSleepTimerIntentHandler())
 sb.add_request_handler(PlayCommandHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(ExceptionEncounteredHandler())
@@ -1015,9 +1242,11 @@ sb.add_request_handler(PlaybackNearlyFinishedHandler())
 sb.add_request_handler(PlaybackFailedHandler())
 
 # Exception handlers
+sb.add_exception_handler(SkillIdMismatchHandler())
 sb.add_exception_handler(CatchAllExceptionHandler())
 
-# Interceptors
+# Interceptors (skill ID check first, before any other work)
+sb.add_global_request_interceptor(SkillIdVerificationInterceptor())
 sb.add_global_request_interceptor(APLSupportRequestInterceptor())
 sb.add_global_request_interceptor(RequestLogger())
 sb.add_global_request_interceptor(LocalizationInterceptor())

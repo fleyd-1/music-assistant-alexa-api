@@ -116,6 +116,71 @@ async def _send_command(server_url, token, player_id, command):
                 raise ValueError(f"Unsupported MA command: {command}")
 
 
+async def _now_playing(server_url, token, player_id):
+    async with aiohttp.ClientSession() as session:
+        async with MusicAssistantClient(server_url, session, token=token) as client:
+            queue = await client.player_queues.get_active_queue(player_id)
+            item = getattr(queue, "current_item", None)
+            if item is None:
+                return None
+            media = getattr(item, "media_item", None)
+            title = getattr(media, "name", None) or getattr(item, "name", None)
+            artists = [getattr(a, "name", "") for a in getattr(media, "artists", None) or []]
+            return {"title": title or "", "artist": ", ".join(a for a in artists if a)}
+
+
+def get_now_playing(player_id, timeout=4.0):
+    """Return {'title', 'artist'} for the current queue item, or None."""
+    server_url = get_env_secret("MA_API_URL")
+    token = get_env_secret("MA_API_TOKEN")
+    if not server_url or not player_id:
+        return None
+    try:
+        return asyncio.run(asyncio.wait_for(
+            _now_playing(server_url, token, player_id), timeout=timeout))
+    except Exception as err:
+        logger.warning("Could not read now playing for player %s: %s",
+                       player_id, type(err).__name__)
+        return None
+
+
+# Sleep timers live in this single Gunicorn worker; a restart cancels them.
+_sleep_timers = {}
+_sleep_lock = threading.Lock()
+
+
+def _sleep_timer_fired(device_id, player_id):
+    with _sleep_lock:
+        _sleep_timers.pop(device_id, None)
+    logger.info("Sleep timer fired for player %s", player_id)
+    # MA's alexa provider pauses by speaking "pause" into the Echo, which comes
+    # back to this skill as AMAZON.PauseIntent: mark it so it is not re-sent.
+    mark_ma_triggered(device_id, "pause")
+    send_player_command(player_id, "pause")
+
+
+def set_sleep_timer(device_id, player_id, seconds):
+    """(Re)start the sleep timer for this Echo. Returns the stop time (epoch)."""
+    timer = threading.Timer(seconds, _sleep_timer_fired, args=(device_id, player_id))
+    timer.daemon = True
+    with _sleep_lock:
+        old = _sleep_timers.pop(device_id, None)
+        if old:
+            old.cancel()
+        _sleep_timers[device_id] = timer
+    timer.start()
+    return time.time() + seconds
+
+
+def cancel_sleep_timer(device_id):
+    """Cancel this Echo's sleep timer. Returns True when one was pending."""
+    with _sleep_lock:
+        timer = _sleep_timers.pop(device_id, None)
+    if timer:
+        timer.cancel()
+    return timer is not None
+
+
 def send_player_command(player_id, command):
     """Send a command to a Music Assistant player. Returns True on success.
 

@@ -146,6 +146,98 @@
           ]
         },
         {
+          "name": "NowPlayingIntent",
+          "slots": [],
+          "samples": [
+            "o que está a tocar",
+            "o que está tocando",
+            "que música é esta",
+            "que música é essa",
+            "que música está a tocar",
+            "que música está tocando",
+            "como se chama esta música",
+            "qual é esta música",
+            "qual é essa música",
+            "quem está a cantar",
+            "quem está cantando",
+            "quem canta esta música"
+          ]
+        },
+        {
+          "name": "SleepTimerIntent",
+          "slots": [
+            {
+              "name": "duration",
+              "type": "AMAZON.DURATION"
+            }
+          ],
+          "samples": [
+            "para a música daqui a {duration}",
+            "pára a música daqui a {duration}",
+            "desliga a música daqui a {duration}",
+            "desliga daqui a {duration}",
+            "para de tocar daqui a {duration}",
+            "para de tocar em {duration}",
+            "desliga a música em {duration}",
+            "temporizador de {duration}",
+            "temporizador de sono de {duration}",
+            "toca só mais {duration}",
+            "toca mais {duration} e desliga"
+          ]
+        },
+        {
+          "name": "CancelSleepTimerIntent",
+          "slots": [],
+          "samples": [
+            "cancela o temporizador",
+            "cancela o temporizador de sono",
+            "não desligues a música",
+            "não desliga a música",
+            "deixa a música a tocar",
+            "tira o temporizador"
+          ]
+        },
+        {
+          "name": "PlayFavoritesIntent",
+          "slots": [],
+          "samples": [
+            "toca os meus favoritos",
+            "toca meus favoritos",
+            "toca as minhas favoritas",
+            "toca minhas favoritas",
+            "põe os meus favoritos",
+            "põe as minhas músicas favoritas",
+            "toca as minhas músicas favoritas",
+            "toca músicas favoritas",
+            "quero ouvir os meus favoritos"
+          ]
+        },
+        {
+          "name": "PlayLastRadioIntent",
+          "slots": [],
+          "samples": [
+            "volta à última rádio",
+            "volta para a última rádio",
+            "toca a última rádio",
+            "põe a última rádio",
+            "a rádio de ontem",
+            "a última rádio que ouvi",
+            "a rádio que estava a ouvir"
+          ]
+        },
+        {
+          "name": "PlayRecentIntent",
+          "slots": [],
+          "samples": [
+            "toca o que estava a ouvir",
+            "toca o que eu estava ouvindo",
+            "volta ao que estava a ouvir",
+            "continua o que estava a ouvir",
+            "toca a última coisa que ouvi",
+            "toca o último que ouvi"
+          ]
+        },
+        {
           "name": "AMAZON.ShuffleOnIntent",
           "samples": []
         },

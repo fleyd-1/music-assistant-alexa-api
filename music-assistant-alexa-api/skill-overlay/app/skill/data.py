@@ -13,7 +13,7 @@ if _app_src not in sys.path:
     sys.path.insert(0, _app_src)
 
 WELCOME_MSG = _("")
-HELP_MSG = _("Bem-vindo ao Music Assistant. Podes pedir para tocar músicas, artistas, rádios, álbuns, playlists ou podcasts. O que queres ouvir?")
+HELP_MSG = _("Bem-vindo ao Music Assistant. Podes pedir músicas, artistas, rádios, álbuns, playlists ou podcasts, os teus favoritos ou a última rádio. Também podes perguntar o que está a tocar ou pedir para parar a música daqui a trinta minutos. O que queres ouvir?")
 UNHANDLED_MSG = _("Não percebi o que disseste. Podes repetir dizendo o que queres ouvir?")
 CANNOT_SKIP_MSG = _("Em transmissões de rádio não é possível saltar de faixa.")
 RESUME_MSG = _("A retomar {}")
