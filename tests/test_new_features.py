@@ -3,6 +3,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from music_assistant_models.errors import MediaNotFoundError
 
 import shared_store
 from skill import lambda_function as handlers
@@ -213,6 +214,9 @@ class _FakeClient:
         return [SimpleNamespace(uri='library://radio/7', name='Antena 3')]
 
     async def play_media(self, **kwargs):
+        self.calls.setdefault('attempts', []).append(kwargs['media'])
+        if kwargs['media'] in self.calls.get('missing', ()):
+            raise MediaNotFoundError('gone from provider')
         self.calls['play'] = kwargs
         shared_store.set_ma({'streamUrl': 'https://music.example/flow/s/Dot/x/Dot.mp3',
                              'player_id': 'Dot'})
@@ -227,12 +231,28 @@ def fake_ma(monkeypatch):
     return _FakeClient.calls
 
 
-def test_play_favourites_queues_favourite_tracks(fake_ma):
+def test_play_favourites_skips_unavailable_and_queues_the_rest(fake_ma, monkeypatch):
+    queued = []
+    monkeypatch.setattr(ma_voice_search.random, 'shuffle', lambda items: None)
+    monkeypatch.setattr(ma_voice_search, '_enqueue_in_background',
+                        lambda url, token, player_id, uris: queued.append((player_id, uris)))
+    fake_ma['missing'] = {'library://track/0'}
+
     ma_voice_search.play_shortcut('favorites', 'Dot')
 
     assert fake_ma['tracks']['favorite'] is True
-    assert sorted(fake_ma['play']['media']) == [f'library://track/{n}' for n in range(3)]
-    assert fake_ma['play']['queue_id'] == 'Dot'
+    assert fake_ma['attempts'] == ['library://track/0', 'library://track/1']
+    assert fake_ma['play']['media'] == 'library://track/1'
+    assert fake_ma['play']['option'].value == 'replace'
+    assert queued == [('Dot', ['library://track/2'])]
+
+
+def test_play_favourites_reports_not_found_when_none_play(fake_ma, monkeypatch):
+    monkeypatch.setattr(ma_voice_search, '_enqueue_in_background', lambda *args: None)
+    fake_ma['missing'] = {f'library://track/{n}' for n in range(3)}
+
+    with pytest.raises(ma_voice_search.SearchPlaybackError, match='not_found'):
+        ma_voice_search.play_shortcut('favorites', 'Dot')
 
 
 def test_play_last_radio_falls_back_to_global_history(fake_ma):
