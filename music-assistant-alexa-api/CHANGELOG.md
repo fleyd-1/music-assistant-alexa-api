@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.1
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.1` image.
+- Fix reachability checks against name-based reverse proxies: the pinned probe was sending `Host: <ip>` instead of the real hostname, causing all three core checks (Skill endpoint, Stream host, Public audio delivery) to report "DNS lookup or connection failed" on split-horizon setups (skill v1.6.1).
+
 ## 1.3.8
 
 - The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.6.0` (cosign-signed). The status page gains an **MA to Amazon channel** check (V13) that catches a dead Music Assistant → Amazon session: MA pushes the stream to the skill but its Alexa provider can no longer ask Amazon to start playback, so MA-initiated play and volume control silently fail while every other check stays green (#86). V13 correlates the pushed stream with the Echo's own playback reports — a fresh push that its player never reports as current becomes a warning pointing at re-authenticating Music Assistant's Alexa provider with Amazon, which is separate from this add-on's **Connect to Amazon** step. An idle Echo does not warn: a stale or absent push reports Unknown instead.
