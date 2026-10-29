@@ -1,3 +1,7 @@
+## 1.5.1
+
+- Favourites: skip tracks that are no longer available at their provider instead of failing the whole request; start the first playable favourite and queue the rest in the background.
+
 ## 1.5.0
 
 - Security: reject Alexa requests signed for any skill other than the one deployed by the setup wizard (skill ID check).

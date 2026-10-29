@@ -4,6 +4,7 @@ import asyncio
 import logging
 import random
 import re
+import threading
 import unicodedata
 import time
 import uuid
@@ -18,7 +19,7 @@ from music_assistant_client.exceptions import (
     InvalidServerVersion,
 )
 from music_assistant_models.enums import MediaType, QueueOption
-from music_assistant_models.errors import MusicAssistantError
+from music_assistant_models.errors import MediaNotFoundError, MusicAssistantError
 
 logger = logging.getLogger(__name__)
 
@@ -584,6 +585,52 @@ async def _shortcut_media(client, kind, player_id, diag):
     return media
 
 
+_FIRST_PLAYABLE_ATTEMPTS = 8
+
+
+async def _play_first_playable(client, player_id, uris):
+    """Start the first track MA can resolve and return the ones left to queue.
+
+    MA rejects a whole list when one favourite is no longer available at its
+    provider, so start a single track first and queue the others afterwards.
+    """
+    for index, uri in enumerate(uris[:_FIRST_PLAYABLE_ATTEMPTS]):
+        try:
+            await client.player_queues.play_media(
+                queue_id=player_id, media=uri, option=QueueOption.REPLACE)
+        except MediaNotFoundError:
+            logger.info("Skipping unavailable favourite %s", uri)
+            continue
+        return uris[index + 1:]
+    raise SearchPlaybackError("not_found")
+
+
+async def _enqueue_each(server_url, token, player_id, uris):
+    async with aiohttp.ClientSession() as session:
+        async with MusicAssistantClient(server_url, session, token=token) as client:
+            for uri in uris:
+                try:
+                    await client.player_queues.play_media(
+                        queue_id=player_id, media=uri, option=QueueOption.ADD)
+                except MediaNotFoundError:
+                    logger.info("Skipping unavailable favourite %s", uri)
+
+
+def _enqueue_in_background(server_url, token, player_id, uris):
+    """Queue the remaining tracks after Alexa already has its response."""
+    if not uris:
+        return
+
+    def run():
+        try:
+            asyncio.run(_enqueue_each(server_url, token, player_id, uris))
+        except Exception as err:
+            logger.warning("Could not queue remaining favourites for %s: %s",
+                           player_id, type(err).__name__)
+
+    threading.Thread(target=run, name="enqueue-favourites", daemon=True).start()
+
+
 async def _play_shortcut(kind, player_id, old_version, server_url, token, diag):
     async with aiohttp.ClientSession() as session:
         connection_started = time.monotonic()
@@ -595,8 +642,12 @@ async def _play_shortcut(kind, player_id, old_version, server_url, token, diag):
             play_started = time.monotonic()
             diag["stage"] = "play_media"
             diag["stage_started"] = play_started
-            await client.player_queues.play_media(
-                queue_id=player_id, media=media, option=QueueOption.REPLACE)
+            if isinstance(media, list):
+                rest = await _play_first_playable(client, player_id, media)
+                _enqueue_in_background(server_url, token, player_id, rest)
+            else:
+                await client.player_queues.play_media(
+                    queue_id=player_id, media=media, option=QueueOption.REPLACE)
             _log_stage(diag, "play_media", play_started, player_id=player_id)
 
     deadline = time.monotonic() + _PUSH_TIMEOUT
