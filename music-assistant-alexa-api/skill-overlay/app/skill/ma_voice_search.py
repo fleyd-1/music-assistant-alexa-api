@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 import re
 import unicodedata
 import time
@@ -530,6 +531,126 @@ def play_search_result(query, media_type, player_id, request_id=None):
                      request_id, diag.get("stage"), type(err).__name__,
                      (time.monotonic() - started) * 1000,
                      (time.monotonic() - diag.get("stage_started", started)) * 1000)
+        raise SearchPlaybackError("api_error") from None
+    finally:
+        if not keep_pending_for_late_push:
+            shared_store.end_voice_request(request_id, player_id)
+
+
+SHORTCUTS = ("favorites", "last_radio", "recent")
+_FAVORITES_LIMIT = 50
+
+_SHORTCUT_PATTERNS = (
+    ("favorites", re.compile(r"\b(?:meus|minhas) (?:musicas )?favorit[oa]s\b|\bmusicas favoritas\b")),
+    ("last_radio", re.compile(r"\bultima radio\b|\bradio (?:que )?(?:estava a ouvir|eu estava ouvindo|de ontem)\b")),
+    ("recent", re.compile(r"\b(?:o que|aquilo que) (?:eu )?estava (?:a ouvir|ouvindo)\b|\bultima coisa que ouvi\b")),
+)
+
+
+def shortcut_for_query(query):
+    """Map a misrouted spoken query (e.g. 'os meus favoritos') to a shortcut."""
+    normal = _normal(query or "")
+    for kind, pattern in _SHORTCUT_PATTERNS:
+        if pattern.search(normal):
+            return kind
+    return None
+
+
+async def _shortcut_media(client, kind, player_id, diag):
+    """Resolve a voice shortcut to something MA can play on this queue."""
+    started = time.monotonic()
+    diag["stage"] = f"shortcut.{kind}"
+    diag["stage_started"] = started
+    if kind == "favorites":
+        tracks = await client.music.get_library_tracks(favorite=True, limit=500)
+        media = [item.uri for item in tracks or [] if getattr(item, "uri", None)]
+        random.shuffle(media)
+        media = media[:_FAVORITES_LIMIT]
+    else:
+        media_types = [MediaType.RADIO] if kind == "last_radio" else None
+        # Prefer what played on this Echo; fall back to the most recent overall.
+        item = None
+        for queue_id in (player_id, None):
+            items = await client.music.recently_played(
+                limit=10, media_types=media_types, queue_id=queue_id,
+                fully_played_only=False)
+            item = next((i for i in items or [] if getattr(i, "uri", None)), None)
+            if item:
+                break
+        media = item.uri if item else None
+    _log_stage(diag, f"shortcut.{kind}", started, found=bool(media))
+    if not media:
+        raise SearchPlaybackError("not_found")
+    return media
+
+
+async def _play_shortcut(kind, player_id, old_version, server_url, token, diag):
+    async with aiohttp.ClientSession() as session:
+        connection_started = time.monotonic()
+        diag["stage"] = "connect"
+        diag["stage_started"] = connection_started
+        async with MusicAssistantClient(server_url, session, token=token) as client:
+            _log_stage(diag, "connect", connection_started)
+            media = await _shortcut_media(client, kind, player_id, diag)
+            play_started = time.monotonic()
+            diag["stage"] = "play_media"
+            diag["stage_started"] = play_started
+            await client.player_queues.play_media(
+                queue_id=player_id, media=media, option=QueueOption.REPLACE)
+            _log_stage(diag, "play_media", play_started, player_id=player_id)
+
+    deadline = time.monotonic() + _PUSH_TIMEOUT
+    push_started = time.monotonic()
+    diag["stage"] = "stream_push_wait"
+    diag["stage_started"] = push_started
+    while time.monotonic() < deadline:
+        current = shared_store.get_ma(player_id) or {}
+        if current.get("version", 0) > old_version and current.get("streamUrl"):
+            _log_stage(diag, "stream_push_wait", push_started,
+                       player_id=player_id, outcome="received")
+            return current
+        await asyncio.sleep(0.1)
+    _log_stage(diag, "stream_push_wait", push_started, "timeout",
+               player_id=player_id)
+    raise SearchPlaybackError("stream_timeout")
+
+
+def play_shortcut(kind, player_id, request_id=None):
+    """Play favourites / the last radio / the last item on this Echo's queue."""
+    if kind not in SHORTCUTS:
+        raise ValueError(f"Unknown shortcut: {kind}")
+    server_url = get_env_secret("MA_API_URL")
+    token = get_env_secret("MA_API_TOKEN")
+    if not server_url:
+        raise SearchPlaybackError("missing_api")
+
+    old_version = (shared_store.get_ma(player_id) or {}).get("version", 0)
+    request_id = request_id or uuid.uuid4().hex[:10]
+    diag = {"request_id": request_id, "stage": "start"}
+    started = time.monotonic()
+    shared_store.begin_voice_request(request_id, player_id, old_version)
+    logger.info("MA voice request_id=%s intent_type=shortcut.%s player_id=%s",
+                request_id, kind, player_id)
+    keep_pending_for_late_push = False
+    try:
+        return asyncio.run(asyncio.wait_for(
+            _play_shortcut(kind, player_id, old_version, server_url, token, diag),
+            timeout=_REQUEST_TIMEOUT,
+        ))
+    except SearchPlaybackError as err:
+        keep_pending_for_late_push = str(err) == "stream_timeout"
+        logger.warning("MA voice request_id=%s failed=%s stage=%s duration_ms=%.1f",
+                       request_id, str(err), diag.get("stage"),
+                       (time.monotonic() - started) * 1000)
+        raise
+    except asyncio.TimeoutError:
+        keep_pending_for_late_push = True
+        logger.error("MA voice request_id=%s failed=request_timeout stage=%s limit_s=%.1f",
+                     request_id, diag.get("stage"), _REQUEST_TIMEOUT)
+        raise SearchPlaybackError("timeout") from None
+    except Exception as err:
+        logger.error("MA voice request_id=%s failed=api_error stage=%s error_type=%s",
+                     request_id, diag.get("stage"), type(err).__name__)
         raise SearchPlaybackError("api_error") from None
     finally:
         if not keep_pending_for_late_push:

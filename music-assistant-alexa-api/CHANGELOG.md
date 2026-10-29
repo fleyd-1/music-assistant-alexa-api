@@ -1,3 +1,10 @@
+## 1.5.0
+
+- Security: reject Alexa requests signed for any skill other than the one deployed by the setup wizard (skill ID check).
+- Add "o que está a tocar?" (`NowPlayingIntent`) using the current Music Assistant queue item.
+- Add a sleep timer ("para a música daqui a 30 minutos", `SleepTimerIntent`/`CancelSleepTimerIntent`).
+- Add favourites, last radio and recently played shortcuts (`PlayFavoritesIntent`, `PlayLastRadioIntent`, `PlayRecentIntent`), also when Alexa routes them through "toca {query}".
+
 ## 1.4.7
 
 - Keep voice session open on search error, timeout, or unrecognized query, reprompting with "Diz-me o que queres ouvir." instead of closing.
