@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.3
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.3` image.
+- Improved check-host.net external public path verification: detailed error messages (timeout, connection error, HTTP error) are now shown in the UI instead of generic failures.
+
 ## 1.3.9-beta.2
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.2` image.
