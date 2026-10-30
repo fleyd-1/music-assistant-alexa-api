@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.10
+
+- Update the bundled skill to the cosign-signed `v1.6.10` image.
+- Fix SonarQube quality gate issues: eliminate duplicate strings, reduce cognitive complexity, remove unused code, validate request_id for security
+
 ## 1.3.9
 
 - Update the bundled skill to the cosign-signed `v1.6.9` image.
