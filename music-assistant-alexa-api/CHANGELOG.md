@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.4
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.4` image.
+- Fix check-host.net integration: the /status/check-host/start endpoint now correctly passes MA_HOSTNAME to public_base(), resolving the TypeError that prevented external checks from starting.
+
 ## 1.3.9-beta.3
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.3` image.
