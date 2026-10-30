@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9
+
+- Update the bundled skill to the cosign-signed `v1.6.9` image.
+- Fix external check-host.net badge merge bug: per-endpoint results now merge correctly so all three badges upgrade to green when external verification passes.
+
 ## 1.3.9-beta.9
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.9` image.
