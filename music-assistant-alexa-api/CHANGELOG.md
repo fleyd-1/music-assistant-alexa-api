@@ -1,5 +1,12 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.6
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.6` image.
+- Compact check-host.net results table with aggregation: shows total/passed/failed nodes, HTTP codes, and latency stats (avg/min/max ms) per endpoint
+- Fix 'OK' dot issue in results table
+- Show success banner when all endpoints pass all vantage points
+
 ## 1.3.9-beta.5
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.5` image.
