@@ -7,17 +7,12 @@ This add-on packages the [Music Assistant Alexa skill service](https://github.co
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
 
-## Installation
-
-1. Add `https://github.com/timlaing/music-assistant-alexa-api` as a custom repository: **Settings → Add-ons → Add-on Store → ⋮ → Repositories**.
-2. Install **Music Assistant Alexa API add-on** (available for **aarch64** and **amd64**).
-3. Start the add-on and open **Web UI → Setup** through Home Assistant ingress — no separate app login.
-
 ## Getting started
 
-1. In **Setup**, save the public audio URL and the API credentials Music Assistant will use, then **Connect to Amazon** with a Login with Amazon (LWA) security profile.
-2. Select your existing personal skill or create a new one, review the settings and **Deploy approved settings**.
-3. In Music Assistant's Alexa provider, set **API URL** to the add-on LAN base URL (for example `http://<HA-LAN-IP>:5000`, without `/ma`) and use the add-on API username and password for Basic Auth.
+1. Start the add-on and open **Web UI → Setup** through Home Assistant ingress — no separate app login.
+2. In **Setup**, save the public audio URL and the API credentials Music Assistant will use, then **Connect to Amazon** with a Login with Amazon (LWA) security profile.
+3. Select your existing personal skill or create a new one, review the settings and **Deploy approved settings**.
+4. In Music Assistant's Alexa provider, set **API URL** to the add-on LAN base URL (for example `http://<HA-LAN-IP>:5000`, without `/ma`) and use the add-on API username and password for Basic Auth.
 
 Alexa needs public HTTPS endpoints for both the skill and the audio streams; the [Streams and Nginx Proxy Manager](https://github.com/timlaing/music-assistant-alexa-api#streams-and-nginx-proxy-manager) section of the repository guide shows a working proxy layout. Full option reference is in the add-on's **Documentation** tab ([DOCS.md](DOCS.md)).
 
