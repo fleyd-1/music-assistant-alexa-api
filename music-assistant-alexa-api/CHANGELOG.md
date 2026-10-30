@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.2
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.2` image.
+- Add check-host.net external public path verification: a new "Test public path (external)" button in the status UI triggers multi-vantage-point checks via check-host.net for the three core endpoints (Skill endpoint, Stream host, Public audio delivery). This verifies the true public path that an Echo would use, independent of local split-horizon DNS. Includes disclaimer that this uses an external service.
+
 ## 1.3.9-beta.1
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.1` image.
