@@ -1,5 +1,11 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.8
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.8` image.
+- Fix external check-host.net result parsing with endpoint labels so badges properly upgrade to green when external verification passes
+- Remove 'Nodes' column from results table to prevent wrapping
+
 ## 1.3.9-beta.7
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.7` image.
