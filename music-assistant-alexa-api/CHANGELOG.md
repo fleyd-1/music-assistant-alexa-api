@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.7
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.7` image.
+- External check-host.net result overrides local reachability: when external verification passes, local results upgrade from "warning" to "reachable" (green badges), split-horizon note removed, summary banner shows "External path check passed" (green).
+
 ## 1.3.9-beta.6
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.6` image.

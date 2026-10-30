@@ -4,8 +4,8 @@
 # The tag+digest here and in the Dockerfile ARG must stay identical — see
 # AGENTS.md for the bump recipe.
 build_from:
-  aarch64: ghcr.io/timlaing/music-assistant-skill:v1.6.6@sha256:d6fbb155481648bdfa9e61aa42fc0cac348f4f41d309265f2a654491f1e3acac
-  amd64: ghcr.io/timlaing/music-assistant-skill:v1.6.6@sha256:d6fbb155481648bdfa9e61aa42fc0cac348f4f41d309265f2a654491f1e3acac
+  aarch64: ghcr.io/timlaing/music-assistant-skill:v1.6.7@sha256:b49f06187d63153e6e8e477fb579663a8a9beaec0bc97264b29bcacd7c1ebe04
+  amd64: ghcr.io/timlaing/music-assistant-skill:v1.6.7@sha256:b49f06187d63153e6e8e477fb579663a8a9beaec0bc97264b29bcacd7c1ebe04
 labels:
   org.opencontainers.image.title: "Home Assistant Add-on: Music Assistant Alexa API add-on"
   org.opencontainers.image.description: "Music Assistant Alexa API add-on."
