@@ -1,5 +1,10 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.3.9-beta.5
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.5` image.
+- Fix check-host.net result parsing: handle `None` node_data when checks are still pending. This allows the "Test public path (external)" button to show results in the table once checks complete.
+
 ## 1.3.9-beta.4
 
 - **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.4` image.
