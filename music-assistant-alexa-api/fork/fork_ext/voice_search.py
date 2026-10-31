@@ -8,6 +8,7 @@ import threading
 import unicodedata
 import time
 import uuid
+from difflib import SequenceMatcher
 
 import aiohttp
 from . import upstream_api as upstream
@@ -26,6 +27,8 @@ logger = logging.getLogger(__name__)
 _PUSH_TIMEOUT = 3.0
 _REQUEST_TIMEOUT = 6.5
 _ARTIST_QUEUE_LIMIT = 8
+_RADIO_SIMILARITY = 0.84
+_RADIO_LIBRARY_LIMIT = 500
 _FUTURA_STREAM_URI = "builtin://radio/https://s4.radio.co/s7e7b6c165/listen"
 _JOANA_PODCAST_URI = "library://podcast/1"
 
@@ -118,6 +121,58 @@ async def _search(client, query, media_type, library_only, diag):
         "podcast": "podcasts",
     }[media_type]
     return list(getattr(results, key, None) or [])
+
+
+def _radio_key(value):
+    """Station name without the words "radio"/"fm"/"am" or a frequency."""
+    text = re.sub(r"\b(?:radio|fm|am)\b", " ", _normal(value))
+    text = re.sub(r"\b\d{2,3}(?: \d)?\b", " ", text)
+    return " ".join(text.split())
+
+
+def _radio_similarity(query_key, name_key):
+    """Compare the spoken name with the whole station name and its leading words."""
+    if not query_key or not name_key:
+        return 0.0
+    words = name_key.split()
+    # Numbers must match exactly: "antena 1" is not "antena 3".
+    if not {w for w in query_key.split() if w.isdigit()} <= {w for w in words if w.isdigit()}:
+        return 0.0
+    candidates = {name_key, " ".join(words[:len(query_key.split())])}
+    return max(SequenceMatcher(None, query_key, c).ratio() for c in candidates)
+
+
+async def _similar_library_radio(client, queries, diag):
+    """Match a mis-transcribed station name ("oxigeno") to a saved one ("Oxigénio").
+
+    Only saved stations are considered, and only one clearly best match is used.
+    """
+    keys = [key for key in dict.fromkeys(_radio_key(q) for q in queries) if len(key) >= 4]
+    if not keys:
+        return None
+    stage = "radio_similar.library"
+    started = time.monotonic()
+    try:
+        radios = await client.music.get_library_radios(limit=_RADIO_LIBRARY_LIMIT)
+    except Exception as err:  # optional fallback; never break the normal search
+        _log_stage(diag, stage, started, "error", error=type(err).__name__)
+        return None
+    scored = []
+    for radio in radios or []:
+        if not getattr(radio, "uri", None):
+            continue
+        name_key = _radio_key(getattr(radio, "name", ""))
+        score = max(_radio_similarity(key, name_key) for key in keys)
+        if score >= _RADIO_SIMILARITY:
+            scored.append((score, radio))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    if not scored or (len(scored) > 1 and scored[0][0] - scored[1][0] < 0.02):
+        _log_stage(diag, stage, started, "no_match", candidates=len(scored))
+        return None
+    score, selected = scored[0]
+    _log_stage(diag, stage, started, score=round(score, 2))
+    _log_selection(diag, selected, "radio")
+    return selected
 
 
 def _best_library_item(items):
@@ -221,6 +276,10 @@ async def find_media(client, query, media_type, diag=None):
                 if items:
                     selected = _best_library_item(items)
                     _log_selection(diag, selected, "radio")
+                    return selected
+            if library_only:
+                selected = await _similar_library_radio(client, searches, diag)
+                if selected is not None:
                     return selected
         raise SearchPlaybackError("not_found")
 
@@ -360,6 +419,12 @@ async def find_media(client, query, media_type, diag=None):
                 selected = _best_library_item(exact_local_artists)
                 _log_selection(diag, selected, "artist_fallback")
                 return selected
+
+    # Before the slow global search, try a saved station with a similar name:
+    # Alexa often hears "oxigeno" or "oxigêneo" for "Oxigénio".
+    selected = await _similar_library_radio(client, variants, diag)
+    if selected is not None:
+        return selected
 
     # MA global search can be fuzzy, so only an exact title can be selected.
     for variant in variants:
