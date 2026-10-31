@@ -1,62 +1,30 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration#add-on-dockerfile
-# See the documentation for more information
-# This requires the submodule skill-api to be present
-
-ARG BUILD_FROM=ghcr.io/home-assistant/aarch64-base@sha256:1b29b917841ca169fa3bece7bb03ae366e9df94a4d382698796a44c5abb3f2b5
+# The application layer ships prebuilt: the skill image contains the Python
+# 3.12 environment (with the verifier/certvalidator patches applied), ASK CLI,
+# the skill code and the assets. This layer adds the add-on runtime glue.
+# The tag+digest here and in build.yaml must stay identical — see AGENTS.md.
+ARG BUILD_FROM=ghcr.io/timlaing/music-assistant-skill:v1.6.10@sha256:39cf27f294051f9369bb920f7f157da679fdd85d02d1bfedd411df8316ab3794
 FROM $BUILD_FROM
 
-# Execute during the build of the image
-ARG TEMPIO_VERSION BUILD_ARCH
-RUN \
-    curl -sSLf -o /usr/bin/tempio \
-    "https://github.com/home-assistant/tempio/releases/download/${TEMPIO_VERSION}/tempio_${BUILD_ARCH}"
+# Serve with gunicorn instead of the skill image's Flask dev server, using the
+# Home Assistant ingress log format from gunicorn.conf.py.
+RUN /app/venv/bin/pip install --no-cache-dir gunicorn==26.2.0
 
-# Install runtime and build dependencies. Retain ASK CLI for legacy manual
-# administration and fallback status checks; the web wizard uses SMAPI directly.
-RUN apk add --no-cache \
-        nodejs \
-        npm \
-        python3 \
-        py3-pip \
-        py3-virtualenv && \
-    apk add --no-cache --virtual .build-dependencies \
-        build-base \
-        cargo \
-        libffi-dev \
-        openssl-dev \
-        python3-dev
-
-WORKDIR /app
-
-# Install dependencies before copying the application so source-only changes
-# can reuse the dependency layer.
-COPY requirements.lock /app/requirements.txt
-COPY scripts/patch_python_dependencies.py /tmp/patch_python_dependencies.py
-RUN python3 -m venv venv && \
-    . venv/bin/activate && \
-    pip install --no-cache-dir pip==26.2.1 && \
-    pip install --no-cache-dir -r requirements.txt && \
-    python /tmp/patch_python_dependencies.py && \
-    npm install --global ask-cli@2.30.7 && \
-    npm cache clean --force && \
-    apk del .build-dependencies && \
-    rm /tmp/patch_python_dependencies.py
-
-# Copy the complete refactored upstream application. Its setup tooling expects
-# the repository app directory at /app/app, so use a symlink rather than a
-# second copy of the Python modules.
-COPY skill-api/app /app/src
-COPY skill-api/assets /app/assets
-COPY skill-api/scripts /app/scripts
-# Apply this fork's Alexa voice-search extension after the pinned upstream
-# skill source so the setup wizard and runtime use the same model and handler.
-COPY skill-overlay/app /app/src
-RUN ln -s /app/src /app/app && \
-    chmod +x /app/scripts/*.sh
-
-# Copy the Home Assistant service definition last.
+# Add-on service definition. The skill image is Ubuntu-based and has no Home
+# Assistant base s6-overlay/bashio, so the service is a plain entrypoint
+# replacing the image CMD.
 COPY gunicorn.conf.py /app/gunicorn.conf.py
 COPY rootfs /
+
+# Fork layer: the Portuguese extension is added as a separate package; the
+# build step edits the pt-BR model and the entrypoint in two checked places.
+# Nothing else of the upstream skill is replaced (see fork/README.md).
+COPY fork/fork_ext /app/src/fork_ext
+COPY fork/models /tmp/fork-models
+COPY fork/apply_fork.py /tmp/apply_fork.py
+RUN /app/venv/bin/python /tmp/apply_fork.py /app/src /usr/local/bin/entrypoint.sh \
+        /tmp/fork-models/pt-BR.intents.json && \
+    rm -rf /tmp/apply_fork.py /tmp/fork-models
 
 ENV LOCALE="en-US" \
     MA_HOSTNAME="" \
@@ -66,6 +34,8 @@ ENV LOCALE="en-US" \
     SKIP_URL_VALIDATION="false" \
     ENABLE_APL="false" \
     PYTHONFAULTHANDLER="1"
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl --fail --silent --output /dev/null "http://localhost:5000/health"

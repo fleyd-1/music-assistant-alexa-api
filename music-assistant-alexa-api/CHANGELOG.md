@@ -1,91 +1,166 @@
-## 1.5.1
+<!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
-- Favourites: skip tracks that are no longer available at their provider instead of failing the whole request; start the first playable favourite and queue the rest in the background.
+## 2.0.0
 
-## 1.5.0
+- **Rebuilt on the current upstream add-on (1.3.10, skill `v1.6.10`).** The skill code now comes
+  from the signed upstream image untouched; the Portuguese (pt-BR) features live in a separate
+  `fork_ext` package that is added on top. Future upstream releases only need a version bump
+  (see `fork/README.md`).
+- Everything from 1.5.1 is kept: voice search (música, artista, rádio, álbum, playlist, podcast),
+  the "hora da música" dialogue, latest podcast episode, now playing, sleep timer, favourites /
+  last radio / recent shortcuts, shuffle and repeat, title and cover art on the Echo screen.
+- The skill-ID check is now upstream's own (`private_access`), so the fork's copy was removed.
+- New from upstream: status page with reachability checks and diagnostics, per-Echo streams,
+  device picker, signed prebuilt image.
 
-- Security: reject Alexa requests signed for any skill other than the one deployed by the setup wizard (skill ID check).
-- Add "o que está a tocar?" (`NowPlayingIntent`) using the current Music Assistant queue item.
-- Add a sleep timer ("para a música daqui a 30 minutos", `SleepTimerIntent`/`CancelSleepTimerIntent`).
-- Add favourites, last radio and recently played shortcuts (`PlayFavoritesIntent`, `PlayLastRadioIntent`, `PlayRecentIntent`), also when Alexa routes them through "toca {query}".
+## 1.3.10
 
-## 1.4.7
-
-- Keep voice session open on search error, timeout, or unrecognized query, reprompting with "Diz-me o que queres ouvir." instead of closing.
-- Enable direct matching of local radio stations (e.g. Antena 3, Oxigénio) in generic track play intent.
-
-## 1.4.6
-
-- Add query variant normalization for spaced letters/acronyms (e.g. `i z a` -> `iza`) and phonetic spelling `isa` -> `iza` to resolve artist IZA reliably.
-
-## 1.4.5
-
-- Automatically strip frequency numbers (e.g. 102.6, 102.seis) and FM/AM suffixes from radio voice queries so stations match their base library names.
-
-## 1.4.4
-
-- Simplify voice prompt on skill open to a concise "Diz-me o que queres ouvir." without lengthy spoken examples.
-
-## 1.4.3
-
-- Ensure voice `LaunchRequest` ("Alexa, abre o Music Assistant") starts conversational dialogue and does not resume stale streams.
-- Fix interaction model slot and sample compliance for Alexa AudioPlayer builtins.
-
-## 1.4.2
-
-- Support voice commands for albums (`PlayAlbumIntent`), playlists (`PlayPlaylistIntent`), and general podcasts (`PlayPodcastIntent`).
-- Separate conversational `LaunchRequest` from direct stream `PlayAudio`, asking what to play instead of auto-resuming.
-- Support voice queue controls for shuffle (`AMAZON.ShuffleOnIntent`/`ShuffleOffIntent`) and repeat (`AMAZON.LoopOnIntent`/`LoopOffIntent`).
-- Translate legacy fallback prompts and error messages to Portuguese.
-- Add request-correlated diagnostic logging for the Joana podcast playback path.
-
-## 1.4.1
-
-- Match artist names with the Portuguese Alexa artist slot and resolve exact local artists before global searches.
-- Queue a bounded set of artist tracks and remove the synchronous stream URL probe from the Alexa response path.
-- Add request-correlated timing logs for Music Assistant search, queue preparation, stream push and Alexa playback events.
+- Update the bundled skill to the cosign-signed `v1.6.10` image.
+- Fix SonarQube quality gate issues: eliminate duplicate strings, reduce cognitive complexity, remove unused code, validate request_id for security
 
 ## 1.3.9
 
-- Add one-sentence Portuguese requests to play an artist through the Music Assistant Alexa skill.
+- Update the bundled skill to the cosign-signed `v1.6.9` image.
+- Fix external check-host.net badge merge bug: per-endpoint results now merge correctly so all three badges upgrade to green when external verification passes.
+
+## 1.3.9-beta.9
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.9` image.
+- Fix external check-host.net badge merge bug: per-endpoint results now merge correctly so all three badges upgrade to green when external verification passes
+
+## 1.3.9-beta.8
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.8` image.
+- Fix external check-host.net result parsing with endpoint labels so badges properly upgrade to green when external verification passes
+- Remove 'Nodes' column from results table to prevent wrapping
+
+## 1.3.9-beta.7
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.7` image.
+- External check-host.net result overrides local reachability: when external verification passes, local results upgrade from "warning" to "reachable" (green badges), split-horizon note removed, summary banner shows "External path check passed" (green).
+
+## 1.3.9-beta.6
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.6` image.
+- Compact check-host.net results table with aggregation: shows total/passed/failed nodes, HTTP codes, and latency stats (avg/min/max ms) per endpoint
+- Fix 'OK' dot issue in results table
+- Show success banner when all endpoints pass all vantage points
+
+## 1.3.9-beta.5
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.5` image.
+- Fix check-host.net result parsing: handle `None` node_data when checks are still pending. This allows the "Test public path (external)" button to show results in the table once checks complete.
+
+## 1.3.9-beta.4
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.4` image.
+- Fix check-host.net integration: the /status/check-host/start endpoint now correctly passes MA_HOSTNAME to public_base(), resolving the TypeError that prevented external checks from starting.
+
+## 1.3.9-beta.3
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.3` image.
+- Improved check-host.net external public path verification: detailed error messages (timeout, connection error, HTTP error) are now shown in the UI instead of generic failures.
+
+## 1.3.9-beta.2
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.2` image.
+- Add check-host.net external public path verification: a new "Test public path (external)" button in the status UI triggers multi-vantage-point checks via check-host.net for the three core endpoints (Skill endpoint, Stream host, Public audio delivery). This verifies the true public path that an Echo would use, independent of local split-horizon DNS. Includes disclaimer that this uses an external service.
+
+## 1.3.9-beta.1
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.6.1` image.
+- Fix reachability checks against name-based reverse proxies: the pinned probe was sending `Host: <ip>` instead of the real hostname, causing all three core checks (Skill endpoint, Stream host, Public audio delivery) to report "DNS lookup or connection failed" on split-horizon setups (skill v1.6.1).
 
 ## 1.3.8
 
-- Normalize repeated "radio" prefixes emitted by Alexa routines before searching saved stations.
+- The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.6.0` (cosign-signed). The status page gains an **MA to Amazon channel** check (V13) that catches a dead Music Assistant → Amazon session: MA pushes the stream to the skill but its Alexa provider can no longer ask Amazon to start playback, so MA-initiated play and volume control silently fail while every other check stays green (#86). V13 correlates the pushed stream with the Echo's own playback reports — a fresh push that its player never reports as current becomes a warning pointing at re-authenticating Music Assistant's Alexa provider with Amazon, which is separate from this add-on's **Connect to Amazon** step. An idle Echo does not warn: a stale or absent push reports Unknown instead.
+- The **Music Assistant API URL** and **access token** now have their own **Music Assistant control API** section on **Application settings** instead of sitting behind **Advanced connection settings**, with helper text naming what they unlock: the Alexa provider, Now playing and Alexa players status checks, the player picker on Devices, voice pause/resume/stop routed to Music Assistant, and stale one-shot stream recovery (skill PR #55, fixes #87).
+- The V1–V12 Music Assistant channel checks probe the configured skill endpoint with its path prefix, so a prefixed deployment is no longer judged by the bare host where another service (for example the Music Assistant stream server) answers (skill PRs #51, #52, fixes skill issues #47 and #49).
+- The Current audio check verifies real bytes and HTTP 405 counts as reachable for the Stream host check on Home Assistant roots that only accept GET (skill PR #50, fixes skill issue #48).
+- Localized responses keep empty messages empty instead of substituting a fallback (skill PR #57).
 
 ## 1.3.7
 
-- Normalize spoken radio names before searching saved stations, avoiding provider false matches and timeouts.
-- Route the stale saved FUTURA station to its verified official Radio.co stream.
+- The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.5.0` (cosign-signed). **Upgrading changes the invocation name in every locale to `music assistant`** — relearn the launch phrase after deploying, and redeploy from **Skill setup → Review settings → Deploy approved settings** if the deployed model still uses an older name (skill issue #71). The status page gains an **Invocation name** check (V12) that compares the deployed name against Music Assistant's start command for the configured locale.
+- Spoken music selection and queue commands: ask for a song, artist, album, playlist, radio station or favourites; queue, shuffle, insert next and favourite the current track; and hear what is playing, next and previous (skill PR #38). Requires the Music Assistant control API URL and token; `en-US` only, other locales unchanged.
+- Playback position: the add-on serves `GET /alexa/playback-state?player_id=…` behind the API credentials, reporting where each Echo really is so Music Assistant's Alexa player no longer drifts ahead of the device with every voice command (skill PR #38). Pairs with Music Assistant server change music-assistant/server#7143.
+- Only requests from the deployed skill are accepted: the endpoint rejects correctly-signed requests from any other Alexa skill with the same endpoint, and fails closed until a deployment has been verified (skill PR #36).
+- Package verification accepts Amazon skill exports that omit the optional `skill-package/` wrapper (skill PR #37).
+- Give each Echo the stream pushed for its own player: with several Echos on separate queues, stale-stream recovery and the APL metadata refresh no longer pick up another player's stream (skill PR #41, fixes skill issue #33).
+- Choose the Music Assistant player from a list on the Devices page: a dropdown of Music Assistant's own players labelled by display name, with validation of saved ids and free text as a fallback when Music Assistant is unreachable (skill PR #42).
+- A diagnostics download and read-only Music Assistant channel verification (checks V1–V11) are available from the status page for the "skill answers but the Echo stays silent" reports (#40, #71).
+- Redesigned setup UI: a four-step wizard with global navigation and eight views on a shared page shell (skill PRs #32, #34). The public skill endpoint is now collected on **Application settings**, before the step that displays the Amazon callback URL derived from it (skill PR #39).
+- Consistent field styling across setup and simulator pages, HTTP response statuses in the Invocations tables, and Echo playback state updated from accepted device callbacks (skill PR #40).
+- The Stream host HEAD check treats HTTP 405 as reachable for Home Assistant roots that only accept GET.
+- Troubleshooting documentation: the Alexa locale must match the locale registered to the Echo devices, the Amazon callback URL follows the public skill endpoint, the reverse-proxy `trusted_proxies` ranges one setup needed, and an ordered "skill answers but the Echo stays silent" sequence including the invocation-name failure class (#72, #76).
+
+## 1.3.7-beta.5
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.5.0-beta.3` image.
+- Give each Echo the stream pushed for its own player: with several Echos on separate queues, stale-stream recovery and the APL metadata refresh no longer pick up another player's stream, so the wrong queue no longer starts playing and another Echo's track no longer appears on this one's card (skill PR #41, fixes skill issue #33).
+- Choose the Music Assistant player from a list on the Devices page: the player field becomes a dropdown of Music Assistant's own players labelled by display name, a saved id Music Assistant no longer reports is kept, an id that is not a listed player is rejected with the previous mapping untouched, and the free-text field remains as a fallback when Music Assistant is unreachable (skill PR #42). The long Alexa device id now truncates instead of stretching the card grid.
+
+## 1.3.7-beta.4
+
+- **Beta — for testing only.** Update the bundled skill to the cosign-signed `v1.5.0-beta.2` image.
+- Use consistent field styling across setup and simulator pages.
+- Show recorded HTTP response statuses in the Invocations desktop table and mobile cards; malformed log entries remain readable.
+- Update Echo playback from accepted device callbacks, showing the last reported state, device and time. Simulator requests are excluded, and callback timestamps prevent delayed events from replacing newer playback states.
+- Treat HTTP 405 as reachable for the Stream host HEAD check, supporting Home Assistant roots that only accept GET. Skill and audio checks retain their stricter response checks.
+- Clarify that Echo Show track metadata appears in Metadata diagnostics.
+
+## 1.3.7-beta.3
+
+- **Beta — for testing only.** The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.5.0-beta.1` (cosign-signed).
+- Spoken music selection and queue commands: ask for a song, artist, album, playlist, radio station or favourites; queue, shuffle, insert next and favourite the current track; and hear what is playing, next and previous (skill PR #38). Requires the Music Assistant control API URL and token for library and favourites changes. `en-US` only; other locales are unchanged.
+- Playback position: the add-on now serves `GET /alexa/playback-state?player_id=…` behind the API credentials, reporting where each Echo really is so Music Assistant's Alexa player no longer drifts ahead of the device with every voice command (skill PR #38). Pairs with Music Assistant server change music-assistant/server#7143.
+- Package verification accepts Amazon exports that omit the optional `skill-package/` wrapper, fixing the deployment failure reported against 1.3.7-beta.2 where every member path differed and the whole package was rejected as a mismatch (skill PR #37).
+- Only requests from the deployed skill are accepted: the endpoint rejects correctly-signed requests from any other Alexa skill with the same endpoint, and fails closed until a deployment has been verified (skill PR #36).
+- A diagnostics download and read-only Music Assistant channel verification (checks V1–V11) are available from the status page, for the "skill answers but the Echo stays silent" reports in #40 and #71 (skill PR #35).
+- Setup now collects the public skill endpoint on **Application settings**, before the step that displays the Amazon callback URL derived from it. The callback URL is derived from the skill endpoint rather than the audio URL, and step 3 no longer collects a value that could silently override an endpoint already registered with Amazon (skill PR #39, addressing points 3 and 4 of @Rob-SBT's report in #40).
+- Document the #40 setup findings: the Alexa locale must match the locale registered to the Echo devices, the Amazon callback URL follows the public skill endpoint, the reverse-proxy `trusted_proxies` ranges one setup needed, and a troubleshooting sequence for "the skill answers but the Echo stays silent" (#72).
+
+## 1.3.7-beta.2
+
+- **Beta — for testing only.** The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.4.2-beta.2` (cosign-signed), which lands the redesigned web UI: eight views on a shared page shell, static assets served from `/assets` with per-use revalidation, and an error fallback on the Devices page that keeps device mapping available (skill PR #34).
+
+## 1.3.7-beta.1
+
+- **Beta — for testing only.** The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.4.2-beta.1` (cosign-signed), which restructures the skill's setup UI into a four-step wizard with global navigation and adds a test-audio player on the reachability page (skill PR #32).
+- Maintenance: CI cosign-verifies the pinned skill image signature before checking out the skill repository to run its test suite (#68).
 
 ## 1.3.6
 
-- Ask what to play when a previously cached stream has expired, instead of ending the launch with a misleading connection error.
-- Keep private stream URLs out of validation logs.
+- The bundled skill moves to `ghcr.io/timlaing/music-assistant-skill:v1.4.1` (cosign-signed), which carries the runtime modernization (Ubuntu 26.04, Python 3.14, Node 26) and the skill fix for stale one-shot flow-stream URLs: after an idle period the skill now validates the stored stream URL, asks Music Assistant to resume the player and plays the pushed replacement URL instead of serving a 404 to Alexa (skill PR #31, addressing the playback failures reported in #40).
+- Raise the gunicorn keepalive so it outlives client connection pools, fixing the first-attempt `Server disconnected` playback failures on the add-on-facing half of #55 (the `players/cmd/play_pause` path is MA-side via alexapy and is not addressed here).
+- Document an NGINX Home Assistant SSL proxy example configuration (#60).
+- Maintenance: CI and Sonar analysis run on Python 3.14 (#63); gunicorn.conf.py is excluded from Sonar coverage and remaining coverage exclusions passed as inline scanner args (#64, #65).
+
+Validated as 1.3.6-beta.1 before this release.
 
 ## 1.3.5
 
-- Route both flow and single/radio streams to the correct Echo.
-- Search saved media before online providers and allow a bounded 6.5-second search/start budget.
+- Update the bundled skill to 1.3.5: package verification now **validates** icon URIs instead of excluding them — a locale's `smallIconUri`/`largeIconUri` equal to the configured artwork or to Amazon's own materialized `file://assets/images/…` form passes, while a foreign URL, a cross-locale path or a missing key still fails — and stores Amazon's one-time re-encoded icon artwork (`assets/images/*IconUri.png`) into the approved package so the byte comparison never fails on it again. Verified with a full deployment against the live Amazon service; every non-artwork file keeps byte-for-byte verification. Fixes the remaining "Amazon's exported package differs from the approved deployment" failures of #40.
+- The add-on image now builds `FROM ghcr.io/timlaing/music-assistant-skill:v1.3.5` (the cosign-signed release image published by the skill repository) instead of compiling the skill from the `skill-api` git submodule. The image already ships the patched Python environment, ASK CLI and assets; the add-on layer contributes gunicorn, the ingress service entrypoint and the healthcheck. Identical application code — faster, reproducible builds and a one-line bump for future skill releases.
 
 ## 1.3.4
 
-- Align Portuguese invocation and playback samples with the Music Assistant provider.
-- Include infinitive search utterances and next/previous intents.
-- Verify exported icon bytes when Amazon rewrites icon references.
+- Update the bundled skill to 1.3.4: package verification no longer fails on `smallIconUri`/`largeIconUri`, which Amazon rewrites during import and export — this was the remaining cause of "Amazon's exported package differs from the approved deployment" reported for es-ES and en-GB; every other field stays fully verified. No add-on changes.
 
 ## 1.3.3
 
-- Keep an empty launch session open to request a track or station.
-- Search title and artist separately with metadata verification; prefer saved stations.
-- Isolate cached streams by Music Assistant player to prevent cross-device playback.
-- Include voice-search regression tests in container CI.
-
-<!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
+- Update the bundled skill to 1.3.3: a failed package verification now names the differing files and JSON paths, the fr-CA and nl-NL interaction models are converted to the current schema with invocation names and a PlayAudio intent, nl-NL gains a manifest entry, and every bundled locale round-trips a full deployment in the test suite; no add-on changes.
 
 ## 1.3.2
 
-- Remove broad no-slot playback phrases that caused Alexa to route specific track and radio requests to `PlayAudio` instead of the voice-search intents.
+- Replace the add-on store README with an overview, installation steps, a quick start and support links.
+- Update the bundled skill to 1.3.2, which fixes the standalone image build workflow and refreshes documentation wording; no application changes.
+
+## 1.3.1
+
+- Fix personal-skill deployment for the es-ES, es-MX, fr-FR and it-IT locales, which failed final package verification with "Amazon's exported package differs from the approved deployment" (#40).
+
+- Update the bundled skill to 1.3.1, which includes the custom slot type list in every bundled interaction model so Amazon's export matches the approved package.
 
 ## 1.3.0
 

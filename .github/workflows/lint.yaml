@@ -21,13 +21,13 @@ jobs:
       addons: ${{ steps.addons.outputs.addons_list }}
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: 🔍 Find add-on directories
         id: addons
-        uses: home-assistant/actions/helpers/find-addons@master
+        uses: home-assistant/actions/helpers/find-addons@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
 
   lint:
     name: Lint add-on ${{ matrix.path }}
@@ -38,14 +38,14 @@ jobs:
         path: ${{ fromJson(needs.find.outputs.addons) }}
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # v2.21.1 still rejects valid digest references. Extend only that regex;
       # run every other upstream schema and semantic check unchanged.
       - name: Check out pinned add-on linter
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           repository: frenck/action-addon-linter
@@ -55,6 +55,6 @@ jobs:
         env:
           ADDON_PATH: ${{ matrix.path }}
         run: |
-          python3 scripts/allow_digest_images.py .addon-linter/src/build.schema.json
+          python3 scripts/allow_digest_images.py
           docker build -t addon-linter .addon-linter/src
           docker run --rm -v "$PWD:/github/workspace:ro" -e INPUT_PATH="/github/workspace/$ADDON_PATH" -e INPUT_COMMUNITY=false addon-linter
