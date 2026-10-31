@@ -64,7 +64,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           context: music-assistant-alexa-api
-          image: ghcr.io/timlaing/${{ matrix.arch }}-addon-ma-alexa-api
+          image: ghcr.io/fleyd-1/${{ matrix.arch }}-addon-ma-alexa-api
           image-tags: ${{ steps.settings.outputs.version }}
           version: ${{ steps.settings.outputs.version }}
           labels: ${{ steps.settings.outputs.labels }}

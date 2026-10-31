@@ -16,6 +16,16 @@ RUN /app/venv/bin/pip install --no-cache-dir gunicorn==26.2.0
 COPY gunicorn.conf.py /app/gunicorn.conf.py
 COPY rootfs /
 
+# Fork layer: the Portuguese extension is added as a separate package; the
+# build step edits the pt-BR model and the entrypoint in two checked places.
+# Nothing else of the upstream skill is replaced (see fork/README.md).
+COPY fork/fork_ext /app/src/fork_ext
+COPY fork/models /tmp/fork-models
+COPY fork/apply_fork.py /tmp/apply_fork.py
+RUN /app/venv/bin/python /tmp/apply_fork.py /app/src /usr/local/bin/entrypoint.sh \
+        /tmp/fork-models/pt-BR.intents.json && \
+    rm -rf /tmp/apply_fork.py /tmp/fork-models
+
 ENV LOCALE="en-US" \
     MA_HOSTNAME="" \
     PORT="5000" \

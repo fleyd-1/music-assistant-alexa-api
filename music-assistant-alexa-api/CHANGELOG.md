@@ -1,5 +1,18 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 2.0.0
+
+- **Rebuilt on the current upstream add-on (1.3.10, skill `v1.6.10`).** The skill code now comes
+  from the signed upstream image untouched; the Portuguese (pt-BR) features live in a separate
+  `fork_ext` package that is added on top. Future upstream releases only need a version bump
+  (see `fork/README.md`).
+- Everything from 1.5.1 is kept: voice search (música, artista, rádio, álbum, playlist, podcast),
+  the "hora da música" dialogue, latest podcast episode, now playing, sleep timer, favourites /
+  last radio / recent shortcuts, shuffle and repeat, title and cover art on the Echo screen.
+- The skill-ID check is now upstream's own (`private_access`), so the fork's copy was removed.
+- New from upstream: status page with reachability checks and diagnostics, per-Echo streams,
+  device picker, signed prebuilt image.
+
 ## 1.3.10
 
 - Update the bundled skill to the cosign-signed `v1.6.10` image.

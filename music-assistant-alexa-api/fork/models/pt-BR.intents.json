@@ -1,0 +1,258 @@
+{
+  "intents": [
+    {
+      "name": "PlayAudio",
+      "slots": [],
+      "samples": [
+        "toca a transmissão atual",
+        "reproduz a transmissão atual",
+        "continua a transmissão atual",
+        "retoma a transmissão atual",
+        "reproduzir áudio",
+        "reproduz áudio",
+        "tocar áudio"
+      ]
+    },
+    {
+      "name": "LatestJoanaIntent",
+      "slots": [],
+      "samples": [
+        "quero ouvir a Joana",
+        "toca a Joana",
+        "toca o último episódio de Extremamente Desagradável",
+        "reproduz o episódio mais recente de Extremamente Desagradável"
+      ]
+    },
+    {
+      "name": "PlayArtistIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca música da {query}",
+        "toca músicas da {query}",
+        "toca música do {query}",
+        "toca músicas de {query}",
+        "reproduz música de {query}",
+        "reproduz músicas de {query}",
+        "tocar música da {query}",
+        "tocar músicas de {query}"
+      ]
+    },
+    {
+      "name": "PlayTrackIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca a música {query}",
+        "toca a canção {query}",
+        "reproduz a música {query}",
+        "coloca a música {query}",
+        "toca {query}",
+        "tocar a música {query}",
+        "reproduzir a música {query}"
+      ]
+    },
+    {
+      "name": "PlayRadioIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca a rádio {query}",
+        "reproduz a rádio {query}",
+        "sintoniza a rádio {query}",
+        "toca a estação {query}",
+        "tocar a rádio {query}",
+        "reproduzir a rádio {query}"
+      ]
+    },
+    {
+      "name": "PlayAlbumIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca o álbum {query}",
+        "tocar o álbum {query}",
+        "reproduz o álbum {query}",
+        "reproduzir o álbum {query}",
+        "toca o disco {query}",
+        "tocar o disco {query}",
+        "reproduz o disco {query}",
+        "reproduzir o disco {query}",
+        "toca o álbum de {query}",
+        "tocar o álbum de {query}",
+        "reproduz o álbum de {query}",
+        "toca o disco de {query}"
+      ]
+    },
+    {
+      "name": "PlayPlaylistIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca a playlist {query}",
+        "tocar a playlist {query}",
+        "reproduz a playlist {query}",
+        "reproduzir a playlist {query}",
+        "toca a lista {query}",
+        "tocar a lista {query}",
+        "reproduz a lista {query}",
+        "reproduzir a lista {query}",
+        "toca a lista de reprodução {query}",
+        "reproduz a lista de reprodução {query}"
+      ]
+    },
+    {
+      "name": "PlayPodcastIntent",
+      "slots": [
+        {
+          "name": "query",
+          "type": "AMAZON.SearchQuery"
+        }
+      ],
+      "samples": [
+        "toca o podcast {query}",
+        "tocar o podcast {query}",
+        "reproduz o podcast {query}",
+        "reproduzir o podcast {query}",
+        "ouve o podcast {query}",
+        "ouvir o podcast {query}"
+      ]
+    },
+    {
+      "name": "NowPlayingIntent",
+      "slots": [],
+      "samples": [
+        "o que está a tocar",
+        "o que está tocando",
+        "que música é esta",
+        "que música é essa",
+        "que música está a tocar",
+        "que música está tocando",
+        "como se chama esta música",
+        "qual é esta música",
+        "qual é essa música",
+        "quem está a cantar",
+        "quem está cantando",
+        "quem canta esta música"
+      ]
+    },
+    {
+      "name": "SleepTimerIntent",
+      "slots": [
+        {
+          "name": "duration",
+          "type": "AMAZON.DURATION"
+        }
+      ],
+      "samples": [
+        "para a música daqui a {duration}",
+        "pára a música daqui a {duration}",
+        "desliga a música daqui a {duration}",
+        "desliga daqui a {duration}",
+        "para de tocar daqui a {duration}",
+        "para de tocar em {duration}",
+        "desliga a música em {duration}",
+        "temporizador de {duration}",
+        "temporizador de sono de {duration}",
+        "toca só mais {duration}",
+        "toca mais {duration} e desliga"
+      ]
+    },
+    {
+      "name": "CancelSleepTimerIntent",
+      "slots": [],
+      "samples": [
+        "cancela o temporizador",
+        "cancela o temporizador de sono",
+        "não desligues a música",
+        "não desliga a música",
+        "deixa a música a tocar",
+        "tira o temporizador"
+      ]
+    },
+    {
+      "name": "PlayFavoritesIntent",
+      "slots": [],
+      "samples": [
+        "toca os meus favoritos",
+        "toca meus favoritos",
+        "toca as minhas favoritas",
+        "toca minhas favoritas",
+        "põe os meus favoritos",
+        "põe as minhas músicas favoritas",
+        "toca as minhas músicas favoritas",
+        "toca músicas favoritas",
+        "quero ouvir os meus favoritos"
+      ]
+    },
+    {
+      "name": "PlayLastRadioIntent",
+      "slots": [],
+      "samples": [
+        "volta à última rádio",
+        "volta para a última rádio",
+        "toca a última rádio",
+        "põe a última rádio",
+        "a rádio de ontem",
+        "a última rádio que ouvi",
+        "a rádio que estava a ouvir"
+      ]
+    },
+    {
+      "name": "PlayRecentIntent",
+      "slots": [],
+      "samples": [
+        "toca o que estava a ouvir",
+        "toca o que eu estava ouvindo",
+        "volta ao que estava a ouvir",
+        "continua o que estava a ouvir",
+        "toca a última coisa que ouvi",
+        "toca o último que ouvi"
+      ]
+    },
+    {
+      "name": "AMAZON.ShuffleOnIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.ShuffleOffIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.LoopOnIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.LoopOffIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.NextIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.PreviousIntent",
+      "samples": []
+    }
+  ]
+}

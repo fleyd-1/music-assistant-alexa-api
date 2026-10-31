@@ -1,0 +1,36 @@
+name: Upstream watch
+
+# Weekly check: has timlaing/music-assistant-alexa-api published a newer
+# add-on release than the one this fork is built on? If so, open (once) an
+# issue that points at the upgrade procedure. Nothing is changed automatically.
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare with the latest upstream release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="$(tr -d '[:space:]' < music-assistant-alexa-api/fork/UPSTREAM_BASE)"
+          latest="$(gh release view --repo timlaing/music-assistant-alexa-api --json tagName --jq .tagName | sed 's/^v//')"
+          echo "fork base: $base, upstream latest: $latest"
+          if [ -z "$latest" ] || [ "$latest" = "$base" ]; then
+            exit 0
+          fi
+          title="Upstream release $latest is available (fork is on $base)"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq length)"
+          if [ "$existing" = "0" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body \
+              "Follow the procedure in music-assistant-alexa-api/fork/README.md ('Taking a new upstream release'), then update fork/UPSTREAM_BASE to $latest."
+          fi
