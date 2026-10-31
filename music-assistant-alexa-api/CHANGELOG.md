@@ -1,5 +1,9 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 2.0.1
+
+- Fix: bridge allowed skill ID from `skill-deployment.json` when `skill-access.json` is missing or deployment phase is not marked complete, preventing HTTP 503 errors on Alexa voice requests.
+
 ## 2.0.0
 
 - **Rebuilt on the current upstream add-on (1.3.10, skill `v1.6.10`).** The skill code now comes

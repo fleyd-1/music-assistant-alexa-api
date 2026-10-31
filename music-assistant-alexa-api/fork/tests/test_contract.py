@@ -48,6 +48,29 @@ def test_skill_id_restriction_is_enforced_by_upstream():
     assert callable(private_access.get_allowed_skill_id)
 
 
+def test_skill_id_fallback_to_deployment_state_when_access_file_missing(tmp_path, monkeypatch):
+    """When skill-access.json is missing and phase != complete, fork_ext bridges the saved skill ID."""
+    import json
+    import private_access
+    import fork_ext
+
+    dep_file = tmp_path / "skill-deployment.json"
+    dep_file.write_text(json.dumps({
+        "phase": "failed",
+        "skill_id": "amzn1.ask.skill.fallback-id",
+        "verified_at": None,
+    }))
+    access_file = tmp_path / "skill-access.json"
+    monkeypatch.setattr(private_access, "deployment_path", lambda: dep_file)
+    monkeypatch.setattr(private_access, "access_path", lambda state_path=None: access_file)
+
+    fork_ext._ensure_skill_access()
+
+    assert private_access.get_allowed_skill_id() == "amzn1.ask.skill.fallback-id"
+    assert access_file.exists()
+    assert json.loads(access_file.read_text())["skill_id"] == "amzn1.ask.skill.fallback-id"
+
+
 def test_extension_handlers_run_before_the_upstream_ones():
     builder = upstream_api.skill_builder.runtime_configuration_builder
     names = [type(chain.request_handler).__name__ for chain in builder.request_handler_chains]
