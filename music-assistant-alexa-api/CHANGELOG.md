@@ -1,5 +1,9 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 2.0.2
+
+- Saved radio stations are found even when Alexa mis-hears the name (e.g. "oxigeno" or "oxigêneo" for "Oxigénio"), without waiting for the slow global search.
+
 ## 2.0.1
 
 - Fix: bridge allowed skill ID from `skill-deployment.json` when `skill-access.json` is missing or deployment phase is not marked complete, preventing HTTP 503 errors on Alexa voice requests.
